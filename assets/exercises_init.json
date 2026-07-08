@@ -1,0 +1,13 @@
+[
+  { "name": "Bench Press", "muscleGroup": "chest" },
+  { "name": "Incline Dumbbell Press", "muscleGroup": "chest" },
+  { "name": "Barbell Squat", "muscleGroup": "legs" },
+  { "name": "Leg Press", "muscleGroup": "legs" },
+  { "name": "Pull-up", "muscleGroup": "back" },
+  { "name": "Barbell Row", "muscleGroup": "back" },
+  { "name": "Overhead Press", "muscleGroup": "shoulders" },
+  { "name": "Lateral Raise", "muscleGroup": "shoulders" },
+  { "name": "Bicep Curl", "muscleGroup": "arms" },
+  { "name": "Tricep Pushdown", "muscleGroup": "arms" },
+  { "name": "Plank", "muscleGroup": "core" }
+]
