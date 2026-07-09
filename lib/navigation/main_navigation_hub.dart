@@ -32,8 +32,8 @@ class _MainNavigationHubState extends State<MainNavigationHub> {
             _currentIndex = index;
           });
         },
-        selectedItemColor: Colors.blueAccent,
-        unselectedItemColor: Colors.grey,
+        selectedItemColor: Theme.of(context).colorScheme.primary,
+        unselectedItemColor: Theme.of(context).colorScheme.onSurfaceVariant,
         showUnselectedLabels: true,
         type: BottomNavigationBarType.fixed,
         items: const [

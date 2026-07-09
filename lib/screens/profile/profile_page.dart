@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:gym_tracker/enums/workout_status.dart';
-import 'package:gym_tracker/screens/workout/workout_detail_page.dart'; // Importăm noua pagină creată
-import '../../main.dart'; // Accesul direct la logsBox-ul tău din Hive
-import '../../models/models.dart'; // Modelul tău WorkoutLog și WorkoutStatus
+import 'package:gym_tracker/screens/workout/workout_detail_page.dart'; 
+import '../../main.dart'; 
+import '../../models/models.dart'; 
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -12,7 +12,6 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  // Schimbăm structura listei pentru a salva atât cheia din Hive, cât și logul complet
   List<MapEntry<dynamic, WorkoutLog>> _finishedLogsWithKeys = [];
 
   @override
@@ -23,7 +22,6 @@ class _ProfilePageState extends State<ProfilePage> {
 
   void _loadWorkoutHistory() {
     if (logsBox.isOpen) {
-      // Păstrăm MapEntry pentru a nu pierde cheia unică (folositoare la ștergere/editare)
       final List<MapEntry<dynamic, WorkoutLog>> allEntries = [];
 
       for (var entry in logsBox.toMap().entries) {
@@ -33,7 +31,6 @@ class _ProfilePageState extends State<ProfilePage> {
         }
       }
 
-      // Sortăm descrescător după data de început
       allEntries.sort((a, b) => b.value.startTime.compareTo(a.value.startTime));
 
       setState(() {
@@ -42,22 +39,8 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  // Funcție simplă și nativă Dart pentru a formata data
   String _formatDateNative(DateTime dt) {
-    final luni = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec'
-    ];
+    final luni = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     final luna = luni[dt.month - 1];
     final ziua = dt.day.toString().padLeft(2, '0');
     final ora = dt.hour.toString().padLeft(2, '0');
@@ -70,8 +53,7 @@ class _ProfilePageState extends State<ProfilePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Workout History',
-            style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('Workout History'),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -80,63 +62,51 @@ class _ProfilePageState extends State<ProfilePage> {
         ],
       ),
       body: _finishedLogsWithKeys.isEmpty
-          ? const Center(
+          ? Center( // Eliminat 'const' de aici deoarece sub-copiii folosesc tema acum
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.history, size: 64, color: Colors.grey),
-                  SizedBox(height: 16),
+                  Icon(Icons.history, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  const SizedBox(height: 16),
                   Text(
                     'No completed workouts yet.\nTime to hit the gym! 🏋️‍♂️',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.grey, fontSize: 16),
+                    style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 16),
                   ),
                 ],
               ),
             )
           : Column(
               children: [
-                // Header-ul cu statistici globale
                 _buildGlobalStatsHeader(),
 
-                const Padding(
-                  padding:
-                      EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                   child: Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
                       'Past Sessions',
-                      style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.grey),
+                      style: Theme.of(context).textTheme.bodyMedium, // Folosește direct stilul muted din temă
                     ),
                   ),
                 ),
 
-                // Lista de antrenamente extrase din Hive
                 Expanded(
                   child: ListView.builder(
                     itemCount: _finishedLogsWithKeys.length,
-                    padding:
-                        const EdgeInsets.only(left: 16, right: 16, bottom: 16),
+                    padding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
                     itemBuilder: (context, index) {
                       final entry = _finishedLogsWithKeys[index];
-                      final logKey = entry.key; // Cheia din Hive
-                      final log = entry.value; // Obiectul WorkoutLog
+                      final logKey = entry.key; 
+                      final log = entry.value; 
 
-                      final String formattedDate =
-                          _formatDateNative(log.startTime);
+                      final String formattedDate = _formatDateNative(log.startTime);
 
                       return Card(
                         margin: const EdgeInsets.symmetric(vertical: 8.0),
-                        elevation: 1,
-                        // MODIFICARE PRINCIPALĂ: Folosim InkWell pentru a adăuga efectul de apăsare și acțiunea onTap
                         child: InkWell(
-                          borderRadius: BorderRadius.circular(
-                              12), // păstrează colțurile rotunjite ale cardului la apăsare
+                          borderRadius: BorderRadius.circular(12), 
                           onTap: () async {
-                            // Deschidem pagina de detalii și trimitem cheia + logul
                             await Navigator.push(
                               context,
                               MaterialPageRoute(
@@ -146,7 +116,6 @@ class _ProfilePageState extends State<ProfilePage> {
                                 ),
                               ),
                             );
-                            // Când utilizatorul revine înapoi (sau șterge antrenamentul), reîmprospătăm automat lista!
                             _loadWorkoutHistory();
                           },
                           child: Padding(
@@ -155,34 +124,28 @@ class _ProfilePageState extends State<ProfilePage> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
                                     Expanded(
                                       child: Text(
                                         log.routineTitle,
-                                        style: const TextStyle(
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.blueAccent),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
+                                        style: Theme.of(context).textTheme.titleLarge, // Automat Alb și Bold
                                       ),
                                     ),
-                                    const Icon(Icons.chevron_right,
-                                        color: Colors.grey,
-                                        size:
-                                            20), // Schimbat în săgeată pentru sugestie de click
+                                    Icon(Icons.chevron_right,
+                                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                        size: 20), 
                                   ],
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
                                   formattedDate,
-                                  style: const TextStyle(
-                                      fontSize: 12, color: Colors.grey),
+                                  style: Theme.of(context).textTheme.bodyMedium, // Automat Gri/Muted
                                 ),
                                 const SizedBox(height: 16),
-                                const Row(
+                                
+                                // --- AICI ERA EROAREA TA PRINCIPALĂ DE CONST ---
+                                Row(
                                   children: [
                                     Expanded(
                                       child: Text(
@@ -190,7 +153,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                         style: TextStyle(
                                             fontSize: 11,
                                             fontWeight: FontWeight.bold,
-                                            color: Colors.blueGrey,
+                                            color: Theme.of(context).colorScheme.onSurfaceVariant, // Folosește tema
                                             letterSpacing: 0.5),
                                       ),
                                     ),
@@ -200,7 +163,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                         style: TextStyle(
                                             fontSize: 11,
                                             fontWeight: FontWeight.bold,
-                                            color: Colors.blueGrey,
+                                            color: Theme.of(context).colorScheme.onSurfaceVariant, // Folosește tema
                                             letterSpacing: 0.5),
                                       ),
                                     ),
@@ -212,17 +175,17 @@ class _ProfilePageState extends State<ProfilePage> {
                                     Expanded(
                                       child: Row(
                                         children: [
-                                          const Icon(Icons.access_time,
-                                              size: 16, color: Colors.grey),
+                                          Icon(Icons.access_time,
+                                              size: 16, color: Theme.of(context).colorScheme.onSurface),
                                           const SizedBox(width: 6),
-                                          // Folosim calculul pe bază de durată nativă din startTime și endTime dacă log.durationInMinutes nu e disponibil direct
                                           Text(
                                             log.endTime != null
                                                 ? '${log.endTime!.difference(log.startTime).inMinutes} min'
                                                 : '0 min',
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                                 fontSize: 15,
-                                                fontWeight: FontWeight.bold),
+                                                fontWeight: FontWeight.bold,
+                                                color: Theme.of(context).colorScheme.onSurface),
                                           ),
                                         ],
                                       ),
@@ -230,14 +193,15 @@ class _ProfilePageState extends State<ProfilePage> {
                                     Expanded(
                                       child: Row(
                                         children: [
-                                          const Icon(Icons.fitness_center,
-                                              size: 16, color: Colors.grey),
+                                          Icon(Icons.fitness_center,
+                                              size: 16, color: Theme.of(context).colorScheme.onSurface),
                                           const SizedBox(width: 6),
                                           Text(
                                             '${log.totalVolume.toStringAsFixed(0)} kg',
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                                 fontSize: 15,
-                                                fontWeight: FontWeight.bold),
+                                                fontWeight: FontWeight.bold,
+                                                color: Theme.of(context).colorScheme.onSurface),
                                           ),
                                         ],
                                       ),
@@ -270,8 +234,9 @@ class _ProfilePageState extends State<ProfilePage> {
       margin: const EdgeInsets.all(16.0),
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
-        color: Colors.blueAccent.withOpacity(0.05),
-        border: Border.all(color: Colors.blueAccent.withOpacity(0.15)),
+        // Efect „glassmorphic” premium folosind opacitatea culorii Primary (mov)
+        color: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+        border: Border.all(color: Theme.of(context).colorScheme.primary.withOpacity(0.15)),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -279,25 +244,25 @@ class _ProfilePageState extends State<ProfilePage> {
         children: [
           Column(
             children: [
-              const Text('Total Sessions',
-                  style: TextStyle(fontSize: 12, color: Colors.grey)),
+              Text('Total Sessions',
+                  style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
               const SizedBox(height: 4),
               Text('$totalWorkouts',
                   style: const TextStyle(
                       fontSize: 22, fontWeight: FontWeight.bold)),
             ],
           ),
-          Container(width: 1, height: 35, color: Colors.grey.withOpacity(0.3)),
+          Container(width: 1, height: 35, color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.2)),
           Column(
             children: [
-              const Text('Total Volume Lifted',
-                  style: TextStyle(fontSize: 12, color: Colors.grey)),
+              Text('Total Volume Lifted',
+                  style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
               const SizedBox(height: 4),
               Text('${globalVolume.toStringAsFixed(0)} kg',
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
-                      color: Colors.blueAccent)),
+                      color: Theme.of(context).colorScheme.secondary)), // Accentul Neon pe total liftat
             ],
           ),
         ],

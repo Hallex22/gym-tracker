@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import 'theme/app_theme.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:path_provider/path_provider.dart';
 import 'enums/enums.dart';
@@ -26,9 +27,9 @@ void main() async {
 
   // Dacă vrei să forțezi curățarea datelor vechi (la schimbarea de modele),
   // poți decomenta linia de mai jos o singură dată:
-  await exercisesBox.clear();
-  await routinesBox.clear();
-  await logsBox.clear();
+  // await exercisesBox.clear();
+  // await routinesBox.clear();
+  // await logsBox.clear();
 
   // Dacă aplicația e proaspăt instalată, citim JSON-ul din assets și populăm Hive
   await _seedDatabaseFromJsonIfNeeded();
@@ -106,12 +107,8 @@ class GymTrackerApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Gym Tracker',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-            seedColor: Colors.blue, brightness: Brightness.dark),
-        useMaterial3: true,
-      ),
+      title: 'GymTracker',
+      theme: AppTheme.darkTheme,
       home: const MainNavigationHub(),
     );
   }

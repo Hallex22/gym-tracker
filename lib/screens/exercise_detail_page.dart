@@ -40,20 +40,33 @@ class ExerciseDetailPage extends StatelessWidget {
                 height: 160,
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  color: Colors.blueAccent.withOpacity(0.05),
+                  color:
+                      Theme.of(context).colorScheme.primary.withOpacity(0.05),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.blueAccent.withOpacity(0.2)),
+                  border: Border.all(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .primary
+                          .withOpacity(0.15)),
                 ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.fitness_center,
-                        size: 48, color: Colors.blueAccent.withOpacity(0.5)),
+                    Icon(
+                      Icons.fitness_center,
+                      size: 48,
+                      color: Theme.of(context)
+                          .colorScheme
+                          .primary
+                          .withOpacity(0.4),
+                    ),
                     const SizedBox(height: 8),
                     Text(
                       'No preview image available',
-                      style:
-                          TextStyle(color: Colors.grey.shade500, fontSize: 13),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontSize: 13,
+                      ),
                     ),
                   ],
                 ),
@@ -67,16 +80,20 @@ class ExerciseDetailPage extends StatelessWidget {
               children: [
                 if (primaryMuscle != null)
                   _buildInfoChip(
+                    context: context,
                     label: 'Target: ${primaryMuscle.name.toUpperCase()}',
-                    color: Colors.blueAccent,
+                    useSecondaryColor: false, // Va folosi Primary (Mov Vibrant)
                   ),
                 _buildInfoChip(
+                  context: context,
                   label: exercise.equipment.name.toUpperCase(),
-                  color: Colors.amber.shade700,
+                  useSecondaryColor:
+                      true, // Va folosi Secondary (Mov Neon) pentru contrast
                 ),
                 _buildInfoChip(
+                  context: context,
                   label: exercise.mechanics.name.toUpperCase(),
-                  color: Colors.purpleAccent,
+                  useSecondaryColor: false,
                 ),
               ],
             ),
@@ -84,42 +101,62 @@ class ExerciseDetailPage extends StatelessWidget {
 
             // --- GRUPE MUSCULARE SECUNDARE ---
             if (secondaryMuscles.isNotEmpty) ...[
-              const Text(
+              Text(
                 'Secondary Muscles Covered',
                 style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey),
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurfaceVariant, // Muted text
+                ),
               ),
               const SizedBox(height: 6),
               Wrap(
                 spacing: 6,
                 children: secondaryMuscles.map((muscle) {
                   return Chip(
-                    label: Text(muscle.name.toUpperCase(),
-                        style: const TextStyle(fontSize: 11)),
+                    label: Text(
+                      muscle.name.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                    ),
                     padding: EdgeInsets.zero,
                     visualDensity: VisualDensity.compact,
-                    backgroundColor: Colors.blueGrey.withOpacity(0.1),
-                    side: BorderSide.none,
+                    backgroundColor: Theme.of(context).colorScheme.surface,
+                    side: BorderSide(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .onSurfaceVariant
+                            .withOpacity(0.2)),
                   );
                 }).toList(),
               ),
               const SizedBox(height: 20),
             ],
 
-            const Divider(),
+            Divider(color: Theme.of(context).colorScheme.primary.withOpacity(0.2)),
             const SizedBox(height: 10),
 
             // --- INSTRUCȚIUNI PAS CU PAS ---
-            const Text(
+            Text(
               'Instructions',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color:
+                    Theme.of(context).colorScheme.onSurface, // Important (Alb)
+              ),
             ),
             const SizedBox(height: 12),
             if (exercise.instructions.isEmpty)
-              const Text('No instructions available for this exercise.',
-                  style: TextStyle(color: Colors.grey))
+              Text(
+                'No instructions available for this exercise.',
+                style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant),
+              )
             else
               ListView.builder(
                 shrinkWrap: true,
@@ -133,20 +170,32 @@ class ExerciseDetailPage extends StatelessWidget {
                       children: [
                         CircleAvatar(
                           radius: 11,
-                          backgroundColor: Colors.blueAccent.withOpacity(0.2),
+                          backgroundColor: Theme.of(context)
+                              .colorScheme
+                              .primary
+                              .withOpacity(0.15),
                           child: Text(
                             '${index + 1}',
-                            style: const TextStyle(
-                                fontSize: 11,
-                                color: Colors.blueAccent,
-                                fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .primary, // Cifrele sunt mov
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
                             exercise.instructions[index],
-                            style: const TextStyle(fontSize: 14, height: 1.4),
+                            style: TextStyle(
+                              fontSize: 14,
+                              height: 1.4,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant, // Text normal (Muted)
+                            ),
                           ),
                         ),
                       ],
@@ -160,18 +209,31 @@ class ExerciseDetailPage extends StatelessWidget {
     );
   }
 
-  Widget _buildInfoChip({required String label, required Color color}) {
+  // --- WIDGET HELPER CONFIGURAT PE TEMĂ ---
+  Widget _buildInfoChip({
+    required BuildContext context,
+    required String label,
+    required bool useSecondaryColor,
+  }) {
+    // Alegem între nuanța Primary (Mov Vibrant) sau Secondary (Mov Neon)
+    final Color chosenColor = useSecondaryColor
+        ? Theme.of(context).colorScheme.secondary
+        : Theme.of(context).colorScheme.primary;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
+        color: chosenColor.withOpacity(0.12),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.4)),
+        border: Border.all(color: chosenColor.withOpacity(0.3)),
       ),
       child: Text(
         label,
-        style:
-            TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 11),
+        style: TextStyle(
+          color: chosenColor,
+          fontWeight: FontWeight.bold,
+          fontSize: 11,
+        ),
       ),
     );
   }
