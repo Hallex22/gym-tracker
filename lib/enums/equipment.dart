@@ -1,0 +1,1 @@
+enum Equipment { barbell, dumbbell, machine, cables, bodyweight, bands }

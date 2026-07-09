@@ -1,0 +1,1 @@
+enum WorkoutStatus { started, finished, cancelled }
