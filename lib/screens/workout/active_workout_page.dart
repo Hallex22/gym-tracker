@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:gym_tracker/enums/workout_status.dart';
-import 'package:gym_tracker/screens/exercise_detail_page.dart';
+import 'package:gym_tracker/screens/exercises/exercise_detail_page.dart';
+import 'package:gym_tracker/widgets/app_buttons.dart';
 import '../../../main.dart';
 import '../../../models/models.dart';
 import '../../enums/enums.dart';
@@ -116,34 +117,53 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
 
   Future<void> _showFinishConfirmationDialog() async {
     final stats = _calculateCurrentStats();
+    final theme = Theme.of(context);
 
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Finish Workout? 🏆',
-            style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Text(
+          'Finish Workout? 🏆',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: theme.colorScheme.onSurface, // Titlul primește onSurface
+          ),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-                'Are you sure you want to complete this workout session? Here is your summary:'),
+            Text(
+              'Are you sure you want to complete this workout session? Here is your summary:',
+              style: TextStyle(
+                color: theme.colorScheme
+                    .onSurfaceVariant, // Textul general primește onSurfaceVariant
+              ),
+            ),
             const SizedBox(height: 16),
             Card(
-              color: Colors.blueAccent.withOpacity(0.05),
+              color: theme.colorScheme.primary
+                  .withOpacity(0.05), // Fundal foarte fin
+              elevation: 0,
               child: Padding(
                 padding: const EdgeInsets.all(12.0),
                 child: Column(
                   children: [
                     _buildStatRow(
                         Icons.timer, 'Duration:', '${stats['duration']} min'),
-                    const Divider(),
+                    Divider(
+                        color: theme.colorScheme.primary
+                            .withOpacity(0.2)), // Culoare custom divider
                     _buildStatRow(Icons.fitness_center, 'Total Volume:',
                         '${stats['volume'].toStringAsFixed(0)} kg'),
-                    const Divider(),
+                    Divider(
+                        color: theme.colorScheme.primary
+                            .withOpacity(0.2)), // Culoare custom divider
                     _buildStatRow(Icons.format_list_numbered, 'Completed Sets:',
                         '${stats['setsCount']}'),
-                    const Divider(),
+                    Divider(
+                        color: theme.colorScheme.primary
+                            .withOpacity(0.2)), // Culoare custom divider
                     _buildStatRow(Icons.format_list_bulleted, 'Exercises:',
                         '${stats['exercisesCount']}'),
                   ],
@@ -153,15 +173,33 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Resume', style: TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Save Workout',
-                style: TextStyle(color: Colors.white)),
+          // Row rezolvă problema așezării butoanelor pe același rând
+          Row(
+            children: [
+              TextButton(
+                style: TextButton.styleFrom(
+                  tapTargetSize: MaterialTapTargetSize
+                      .shrinkWrap, // Elimină padding-ul invizibil din jur
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(
+                  'Resume',
+                  style: TextStyle(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: AppFilledButton(
+                  label: 'Save Workout',
+                  onPressed: () => Navigator.pop(context, true),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -177,13 +215,15 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
       padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: Colors.blueGrey),
+          Icon(icon,
+              size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
           const SizedBox(width: 8),
           Text(label, style: const TextStyle(fontWeight: FontWeight.w500)),
           const Spacer(),
           Text(value,
-              style: const TextStyle(
-                  fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+              style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.primary)),
         ],
       ),
     );
@@ -475,16 +515,25 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Icon(Icons.drag_handle, color: Colors.blueGrey),
+                          Icon(Icons.drag_handle,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(exercise.name,
-                                style: const TextStyle(
-                                    fontSize: 18, fontWeight: FontWeight.bold)),
+                                style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurface)),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.info_outline,
-                                color: Colors.blueAccent),
+                            icon: Icon(Icons.info_outline,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant),
                             onPressed: () {
                               final rawData = exercisesBox.get(exercise.name);
                               if (rawData != null) {
@@ -518,22 +567,35 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                           )
                         ],
                       ),
-                      const Divider(),
-                      const Padding(
+                      Divider(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .primary
+                              .withOpacity(0.2)),
+                      Padding(
                         padding: EdgeInsets.symmetric(vertical: 4.0),
                         child: Row(
                           children: [
                             SizedBox(
                                 width: 50,
                                 child: Text('Set',
-                                    style: TextStyle(color: Colors.grey))),
+                                    style: TextStyle(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant))),
                             Expanded(
                                 child: Text('Weight (kg)',
-                                    style: TextStyle(color: Colors.grey),
+                                    style: TextStyle(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant),
                                     textAlign: TextAlign.center)),
                             Expanded(
                                 child: Text('Reps',
-                                    style: TextStyle(color: Colors.grey),
+                                    style: TextStyle(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant),
                                     textAlign: TextAlign.center)),
                           ],
                         ),
@@ -610,20 +672,22 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          ElevatedButton.icon(
-                            onPressed: () {
-                              setState(() {
-                                double lastWeight =
-                                    sets.isNotEmpty ? sets.last.weight : 0.0;
-                                int lastReps =
-                                    sets.isNotEmpty ? sets.last.reps : 0;
-                                sets.add(LoggedSet(
-                                    weight: lastWeight, reps: lastReps));
-                              });
-                              _updateLiveProgress();
-                            },
-                            icon: const Icon(Icons.add),
-                            label: const Text('Add Set'),
+                          Expanded(
+                            child: AppGhostButton(
+                              label: 'Add Set',
+                              icon: Icons.add,
+                              onPressed: () {
+                                setState(() {
+                                  double lastWeight =
+                                      sets.isNotEmpty ? sets.last.weight : 0.0;
+                                  int lastReps =
+                                      sets.isNotEmpty ? sets.last.reps : 0;
+                                  sets.add(LoggedSet(
+                                      weight: lastWeight, reps: lastReps));
+                                });
+                                _updateLiveProgress();
+                              },
+                            ),
                           ),
                           if (sets.length > 1)
                             TextButton(
@@ -648,11 +712,10 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
         bottomNavigationBar: SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(8.0),
-            child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.blueGrey),
+            child: AppOutlinedButton(
+              label: "Add Alternative Exercise",
               onPressed: _addNewExerciseDynamically,
-              icon: const Icon(Icons.fitness_center),
-              label: const Text('Add Alternative Exercise'),
+              icon: Icons.fitness_center,
             ),
           ),
         ),

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:gym_tracker/screens/exercise_detail_page.dart';
+import 'package:gym_tracker/screens/exercises/exercise_detail_page.dart';
 import 'package:gym_tracker/screens/routines/routine_form_page.dart';
 import '../../main.dart'; // Importăm pentru a avea acces la routinesBox la ștergere
 import '../../models/models.dart';
@@ -210,7 +210,9 @@ class _RoutineDetailPageState extends State<RoutineDetailPage> {
               ],
             ),
           ),
-          Divider(height: 1, color: Theme.of(context).colorScheme.primary.withOpacity(0.2)),
+          Divider(
+              height: 1,
+              color: Theme.of(context).colorScheme.primary.withOpacity(0.2)),
 
           // --- LISTA DE EXERCIȚII DIN RUTINĂ ---
           Expanded(

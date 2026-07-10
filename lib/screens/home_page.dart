@@ -5,6 +5,7 @@ import 'package:gym_tracker/screens/routines/routine_form_page.dart';
 import '../main.dart';
 import '../models/models.dart';
 import 'workout/active_workout_page.dart';
+import 'package:gym_tracker/widgets/app_buttons.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -301,34 +302,17 @@ class _HomePageState extends State<HomePage> {
               ],
 
               // 2. BUTONUL: START EMPTY WORKOUT
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Theme.of(context)
-                          .colorScheme
-                          .primary
-                          .withOpacity(0.12),
-                      foregroundColor: Theme.of(context).colorScheme.primary,
-                      side: BorderSide(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .primary
-                              .withOpacity(0.4),
-                          width: 1),
-                    ),
+              if (_activeWorkout == null) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16.0, vertical: 8.0),
+                  child: AppOutlinedButton(
+                    label: 'Start Empty Workout',
+                    icon: Icons.add,
                     onPressed: _startEmptyWorkout,
-                    icon: const Icon(Icons.add),
-                    label: const Text('Start Empty Workout',
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 16)),
                   ),
                 ),
-              ),
+              ],
 
               Padding(
                 padding:
@@ -336,7 +320,7 @@ class _HomePageState extends State<HomePage> {
                 child: Text('Routines',
                     style: TextStyle(
                         fontSize: 18,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w500,
                         color: Theme.of(context)
                             .colorScheme
                             .onSurfaceVariant)), // Text Muted global
@@ -413,29 +397,10 @@ class _HomePageState extends State<HomePage> {
                               const SizedBox(height: 16),
 
                               // Noul buton modern pentru începerea antrenamentului
-                              SizedBox(
-                                width: double.infinity,
-                                height: 40,
-                                child: ElevatedButton.icon(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Theme.of(context)
-                                        .colorScheme
-                                        .primary
-                                        .withOpacity(0.12),
-                                    foregroundColor:
-                                        Theme.of(context).colorScheme.primary,
-                                    elevation: 0,
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 16, vertical: 0),
-                                    shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(8)),
-                                  ),
-                                  onPressed: () => _tryStartWorkout(routine),
-                                  icon: const Icon(Icons.play_arrow, size: 18),
-                                  label: const Text('Start Workout',
-                                      style: TextStyle(
-                                          fontWeight: FontWeight.bold)),
-                                ),
+                              AppGhostButton(
+                                label: 'Start Workout',
+                                icon: Icons.play_arrow,
+                                onPressed: () => _tryStartWorkout(routine),
                               ),
                             ],
                           ),

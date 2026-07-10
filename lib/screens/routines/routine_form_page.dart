@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../enums/enums.dart';
-import '../../main.dart';
+import '../../main.dart'; // Pentru accesul la routinesBox
 import '../../models/models.dart';
+import '../../widgets/app_buttons.dart'; // Importul butoanelor reutilizabile
+import '../exercises/exercise_selection_page.dart';
 
 class RoutineFormPage extends StatefulWidget {
   final Routine? routine; // Dacă e null -> Creare. Dacă are valoare -> Editare.
@@ -20,10 +22,6 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
   late String _description;
   final List<Exercise> _selectedExercises = [];
 
-  List<Exercise> _allAvailableExercises = [];
-  String _searchQuery = '';
-  MuscleGroup? _selectedMuscleFilter;
-
   bool get _isEditMode => widget.routine != null;
 
   @override
@@ -34,45 +32,40 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
     if (widget.routine != null) {
       _selectedExercises.addAll(widget.routine!.exercises);
     }
-    _loadAvailableExercises();
   }
 
-  void _loadAvailableExercises() {
-    final exercises =
-        exercisesBox.values.map((e) => Exercise.fromMap(e as Map)).toList();
-    setState(() {
-      _allAvailableExercises = exercises;
-    });
-  }
+  // --- DIALOG CONFIRMARE SCOATERE EXERCIȚIU DIN LISTĂ ---
+  Future<void> _confirmRemoveExercise(Exercise exercise) async {
+    final bool confirm = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Remove Exercise? 📝'),
+            content: Text(
+                'Are you sure you want to remove "${exercise.name}" from this routine?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(
+                  'Cancel',
+                  style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant),
+                ),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Remove',
+                    style: TextStyle(color: Colors.redAccent)),
+              ),
+            ],
+          ),
+        ) ??
+        false;
 
-  void _toggleExerciseSelection(Exercise exercise) {
-    setState(() {
-      final index =
-          _selectedExercises.indexWhere((e) => e.name == exercise.name);
-      if (index >= 0) {
-        _selectedExercises.removeAt(index);
-      } else {
-        _selectedExercises.add(exercise);
-      }
-    });
-  }
-
-  bool _isExerciseSelected(Exercise exercise) {
-    return _selectedExercises.any((e) => e.name == exercise.name);
-  }
-
-  // LOGICĂ ACTUAlIZATĂ: Filtrare inteligentă bazată pe listă
-  List<Exercise> get _filteredExercises {
-    return _allAvailableExercises.where((exercise) {
-      final matchesSearch =
-          exercise.name.toLowerCase().contains(_searchQuery.toLowerCase());
-
-      // Verificăm dacă grupa selectată în chip se află în interiorul listei de grupe ale exercițiului
-      final matchesMuscle = _selectedMuscleFilter == null ||
-          exercise.muscleGroups.contains(_selectedMuscleFilter);
-
-      return matchesSearch && matchesMuscle;
-    }).toList();
+    if (confirm) {
+      setState(() {
+        _selectedExercises.removeWhere((e) => e.name == exercise.name);
+      });
+    }
   }
 
   Future<void> _saveRoutine() async {
@@ -119,8 +112,13 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
             'Are you sure you want to delete this routine permanently?'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(
+              'Cancel',
+              style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant),
+            ),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             child:
@@ -139,191 +137,190 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Definirea stilului comun pentru borduri inteligente
+    final inputDecorationTheme = InputDecoration(
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: BorderSide(
+          color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+        ),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: BorderSide(
+          color: Theme.of(context).colorScheme.primary,
+          width: 1.5,
+        ),
+      ),
+    );
+
     return Scaffold(
       appBar: AppBar(
         title: Text(_isEditMode ? 'Edit Routine' : 'Create Routine'),
         actions: [
           if (_isEditMode)
             IconButton(
-                icon: const Icon(Icons.delete, color: Colors.redAccent),
-                onPressed: _deleteRoutine),
+              icon: const Icon(Icons.delete, color: Colors.redAccent),
+              onPressed: _deleteRoutine,
+            ),
           IconButton(
-              icon: const Icon(Icons.save, color: Colors.blueAccent, size: 28),
-              onPressed: _saveRoutine)
+            icon: Icon(Icons.save,
+                color: Theme.of(context).colorScheme.primary, size: 28),
+            onPressed: _saveRoutine,
+          )
         ],
       ),
-      body: Form(
-        key: _formKey,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                children: [
-                  TextFormField(
-                    initialValue: _title,
-                    decoration: const InputDecoration(
+      // Adăugat GestureDetector pentru închiderea tastatului la apăsare în exterior
+      body: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              // --- SECȚIUNEA INTRODUCERE DATE (TITLU & DESCRIERE) ---
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  children: [
+                    TextFormField(
+                      initialValue: _title,
+                      decoration: inputDecorationTheme.copyWith(
                         labelText: 'Routine Title',
-                        border: OutlineInputBorder()),
-                    validator: (value) => value == null || value.trim().isEmpty
-                        ? 'Title is required'
-                        : null,
-                    onSaved: (value) => _title = value!.trim(),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    initialValue: _description,
-                    decoration: const InputDecoration(
-                        labelText: 'Description / Notes (Optional)',
-                        border: OutlineInputBorder()),
-                    onSaved: (value) => _description = value ?? '',
-                  ),
-                ],
-              ),
-            ),
-            if (_selectedExercises.isNotEmpty) ...[
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text('Routine Structure (Hold & Drag to reorder):',
-                      style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.amber)),
-                ),
-              ),
-              Container(
-                constraints: const BoxConstraints(maxHeight: 180),
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.amber.withOpacity(0.3)),
-                  borderRadius: BorderRadius.circular(8),
-                  color: Colors.amber.withOpacity(0.02),
-                ),
-                child: ReorderableListView.builder(
-                  shrinkWrap: true,
-                  itemCount: _selectedExercises.length,
-                  onReorderItem: (oldIndex, newIndex) {
-                    setState(() {
-                      final item = _selectedExercises.removeAt(oldIndex);
-                      _selectedExercises.insert(newIndex, item);
-                    });
-                  },
-                  itemBuilder: (context, index) {
-                    final ex = _selectedExercises[index];
-
-                    // MODIFICARE: Luăm prima grupă ca fiind cea principală + menționăm echipamentul
-                    final primaryMuscle = ex.muscleGroups.isNotEmpty
-                        ? ex.muscleGroups.first.name
-                        : 'core';
-                    final extraInfo =
-                        '${primaryMuscle.toUpperCase()} • ${ex.equipment.name.toUpperCase()}';
-
-                    return ListTile(
-                      key: ValueKey('selected_vert_${ex.name}'),
-                      dense: true,
-                      leading:
-                          const Icon(Icons.drag_handle, color: Colors.amber),
-                      title: Text(ex.name,
-                          style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Text(extraInfo,
-                          style: const TextStyle(
-                              fontSize: 10, color: Colors.grey)),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.close,
-                            color: Colors.redAccent, size: 18),
-                        onPressed: () => _toggleExerciseSelection(ex),
                       ),
-                    );
-                  },
+                      validator: (value) =>
+                          value == null || value.trim().isEmpty
+                              ? 'Title is required'
+                              : null,
+                      onSaved: (value) => _title = value!.trim(),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      initialValue: _description,
+                      decoration: inputDecorationTheme.copyWith(
+                        labelText: 'Description / Notes (Optional)',
+                      ),
+                      onSaved: (value) => _description = value ?? '',
+                    ),
+                  ],
                 ),
               ),
-            ],
-            const Divider(),
-            Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-              child: Column(
-                children: [
-                  TextField(
-                    decoration: InputDecoration(
-                      labelText: 'Search Exercises...',
-                      prefixIcon: const Icon(Icons.search),
-                      suffixIcon: _searchQuery.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear),
-                              onPressed: () =>
-                                  setState(() => _searchQuery = ''))
-                          : null,
-                      border: const OutlineInputBorder(),
-                      contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                    ),
-                    onChanged: (value) => setState(() => _searchQuery = value),
-                  ),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    height: 40,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      children: MuscleGroup.values.map((muscle) {
-                        final isSelected = _selectedMuscleFilter == null
-                            ? false
-                            : _selectedMuscleFilter == muscle;
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 6.0),
-                          child: FilterChip(
-                            label: Text(muscle.name.toUpperCase(),
-                                style: const TextStyle(fontSize: 11)),
-                            selected: isSelected,
-                            selectedColor: Colors.blueAccent.withOpacity(0.3),
-                            checkmarkColor: Colors.blueAccent,
-                            onSelected: (bool selected) {
-                              setState(() {
-                                _selectedMuscleFilter =
-                                    selected ? muscle : null;
-                              });
-                            },
-                          ),
-                        );
-                      }).toList(),
+
+              // --- STRUCTURA RUTINEI (AFIȘARE EXERCIȚII SELECTATE) ---
+              if (_selectedExercises.isNotEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16.0, vertical: 4.0),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Routine Structure (Hold & Drag to reorder):',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                     ),
                   ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: _filteredExercises.isEmpty
-                  ? const Center(
-                      child: Text('No exercises found matching filters.',
-                          style: TextStyle(color: Colors.grey)))
-                  : ListView.builder(
-                      itemCount: _filteredExercises.length,
+                ),
+                Expanded(
+                  child: Container(
+                    margin:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    child: ReorderableListView.builder(
+                      itemCount: _selectedExercises.length,
+                      onReorderItem: (oldIndex, newIndex) {
+                        setState(() {
+                          final item = _selectedExercises.removeAt(oldIndex);
+                          _selectedExercises.insert(newIndex, item);
+                        });
+                      },
                       itemBuilder: (context, index) {
-                        final exercise = _filteredExercises[index];
-                        final isSelected = _isExerciseSelected(exercise);
-
-                        // MODIFICARE: Corectat subtitlul pentru a folosi grupa principală + echipament
-                        final primaryMuscle = exercise.muscleGroups.isNotEmpty
-                            ? exercise.muscleGroups.first.name
+                        final ex = _selectedExercises[index];
+                        final primaryMuscle = ex.muscleGroups.isNotEmpty
+                            ? ex.muscleGroups.first.name
                             : 'core';
-                        final subtitleText =
-                            '${primaryMuscle.toUpperCase()} • ${exercise.equipment.name.toUpperCase()}';
+                        final extraInfo =
+                            '${primaryMuscle.toUpperCase()} • ${ex.equipment.name.toUpperCase()}';
 
-                        return CheckboxListTile(
-                          title: Text(exercise.name),
-                          subtitle: Text(subtitleText,
-                              style: const TextStyle(
-                                  fontSize: 11, color: Colors.blueGrey)),
-                          value: isSelected,
-                          onChanged: (bool? value) =>
-                              _toggleExerciseSelection(exercise),
-                          activeColor: Colors.blueAccent,
+                        return Card(
+                          key: ValueKey('selected_vert_${ex.name}'),
+                          margin: const EdgeInsets.symmetric(vertical: 4),
+                          elevation: 0,
+                          child: ListTile(
+                            dense: true,
+                            leading: Icon(Icons.drag_handle,
+                                color: Theme.of(context).colorScheme.primary),
+                            title: Text(
+                              ex.name,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Theme.of(context).colorScheme.onSurface,
+                              ),
+                            ),
+                            subtitle: Text(
+                              extraInfo,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
+                              ),
+                            ),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.close,
+                                  color: Colors.redAccent, size: 18),
+                              onPressed: () => _confirmRemoveExercise(ex),
+                            ),
+                          ),
                         );
                       },
                     ),
-            ),
-          ],
+                  ),
+                ),
+              ] else ...[
+                Expanded(
+                  child: Center(
+                    child: Text(
+                      'No exercises added yet.\nTap below to start building! 🛠️',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          fontSize: 15),
+                    ),
+                  ),
+                ),
+              ],
+
+              // --- COMPONENTA REUTILIZABILĂ CURENTĂ DE ADĂUGARE ---
+              SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: AppOutlinedButton(
+                    label: 'Add Exercises',
+                    icon: Icons.add,
+                    onPressed: () async {
+                      final List<Exercise>? result =
+                          await Navigator.push<List<Exercise>>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ExerciseSelectionPage(
+                            existingExercises: _selectedExercises,
+                          ),
+                        ),
+                      );
+
+                      if (result != null && result.isNotEmpty) {
+                        setState(() {
+                          _selectedExercises.addAll(result);
+                        });
+                      }
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
