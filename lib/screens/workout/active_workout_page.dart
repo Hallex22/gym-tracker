@@ -52,17 +52,24 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
       _sessionStart = activeLog.startTime;
       _titleController.text = activeLog.routineTitle;
 
-      // FĂRĂ JSON DECODE: Hive ne dă direct lista de obiecte mapate în WorkoutLog
       setState(() {
         _activeExercises.addAll(activeLog.exercises);
       });
     } else {
       _sessionStart = DateTime.now();
       for (var exercise in widget.routine.exercises) {
+        final prevLog = _getPreviousLogForExercise(exercise.name);
+
         _activeExercises.add(
           LoggedExercise(
             name: exercise.name,
-            sets: [const LoggedSet(weight: 0.0, reps: 0)],
+            sets: [
+              prevLog != null && prevLog.sets.isNotEmpty
+                  ? LoggedSet(
+                      weight: prevLog.sets.first.weight,
+                      reps: prevLog.sets.first.reps)
+                  : const LoggedSet(weight: 0.0, reps: 0)
+            ],
           ),
         );
       }
@@ -113,6 +120,26 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
       'setsCount': totalSets,
       'exercisesCount': _activeExercises.length,
     };
+  }
+
+  LoggedExercise? _getPreviousLogForExercise(String exerciseName) {
+    // Luăm toate logurile, le inversăm ca să începem cu cele mai recente
+    final allLogs = logsBox.values
+        .map((e) => WorkoutLog.fromMap(e as Map))
+        .toList()
+        .reversed;
+
+    for (var log in allLogs) {
+      // Căutăm doar în antrenamentele finalizate cu succes
+      if (log.status == WorkoutStatus.finished) {
+        for (var ex in log.exercises) {
+          if (ex.name == exerciseName) {
+            return ex; // Am găsit exact ce a făcut tura trecută!
+          }
+        }
+      }
+    }
+    return null; // Nu s-a mai antrenat la acest exercițiu până acum
   }
 
   Future<void> _showFinishConfirmationDialog() async {
@@ -288,7 +315,8 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                   .toLowerCase()
                   .contains(modalSearchQuery.toLowerCase());
               final matchesMuscle = modalSelectedMuscle == null ||
-                  ex.muscleGroups.contains(modalSelectedMuscle);
+                  ex.primaryMuscles.any((muscleTarget) =>
+                      muscleTarget.group == modalSelectedMuscle);
               return matchesSearch && matchesMuscle;
             }).toList();
 
@@ -384,10 +412,11 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                             itemCount: filteredExercises.length,
                             itemBuilder: (context, index) {
                               final exercise = filteredExercises[index];
-                              final primaryMuscle =
-                                  exercise.muscleGroups.isNotEmpty
-                                      ? exercise.muscleGroups.first.name
-                                      : 'core';
+                              final primaryMuscle = exercise
+                                      .primaryMuscles.isNotEmpty
+                                  ? exercise.primaryMuscles.first.group
+                                      .name // sau .label dacă vrei numele specific
+                                  : 'core';
                               final infoText =
                                   '${primaryMuscle.toUpperCase()} • ${exercise.equipment.name.toUpperCase()}';
 

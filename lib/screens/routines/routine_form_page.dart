@@ -237,11 +237,11 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
                       },
                       itemBuilder: (context, index) {
                         final ex = _selectedExercises[index];
-                        final primaryMuscle = ex.muscleGroups.isNotEmpty
-                            ? ex.muscleGroups.first.name
-                            : 'core';
+                        final primaryMuscle = ex.primaryMuscles.isNotEmpty
+                            ? ex.primaryMuscles.first.group
+                            : 'Core';
                         final extraInfo =
-                            '${primaryMuscle.toUpperCase()} • ${ex.equipment.name.toUpperCase()}';
+                            '${primaryMuscle} • ${ex.equipment.name.toUpperCase()}';
 
                         return Card(
                           key: ValueKey('selected_vert_${ex.name}'),

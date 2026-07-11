@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:gym_tracker/enums/workout_status.dart';
 import 'package:gym_tracker/screens/routines/routine_detail_page.dart';
 import 'package:gym_tracker/screens/routines/routine_form_page.dart';
@@ -74,6 +75,24 @@ class _HomePageState extends State<HomePage> {
     _loadData();
   }
 
+  void _showTopSuccessToast(String message) {
+    final overlay = Overlay.of(context);
+    late OverlayEntry overlayEntry;
+
+    overlayEntry = OverlayEntry(
+      builder: (context) {
+        return _TopToastWidget(
+          message: message,
+          onDismiss: () {
+            overlayEntry.remove();
+          },
+        );
+      },
+    );
+
+    overlay.insert(overlayEntry);
+  }
+
   void _showActiveWorkoutAlert() {
     showDialog(
       context: context,
@@ -88,6 +107,122 @@ class _HomePageState extends State<HomePage> {
           )
         ],
       ),
+    );
+  }
+
+  // --- DRAWER PENTRU IMPORT ROUTINE ---
+  void _showImportRoutineSheet() {
+    final TextEditingController codeController = TextEditingController();
+    final theme = Theme.of(context);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled:
+          true, // Permite sheet-ului să se ridice deasupra tastaturii
+      builder: (context) {
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context)
+                .viewInsets
+                .bottom, // Padding dinamic pentru tastatură
+          ),
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color:
+                            theme.colorScheme.onSurfaceVariant.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  Text(
+                    'Import Routine 📥',
+                    style: theme.textTheme.titleLarge
+                        ?.copyWith(fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Paste the code received from your friend to clone their routine structure.',
+                    style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: codeController,
+                    maxLines: 3,
+                    decoration: InputDecoration(
+                      hintText: 'Paste code here...',
+                      border: const OutlineInputBorder(),
+                      contentPadding: const EdgeInsets.all(12),
+                      suffixIcon: IconButton(
+                        icon: const Icon(Icons.assignment_returned_outlined),
+                        onPressed: () async {
+                          final data =
+                              await Clipboard.getData(Clipboard.kTextPlain);
+                          if (data?.text != null) {
+                            codeController.text = data!.text!;
+                          }
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: Text('Cancel',
+                              style: TextStyle(
+                                  color: theme.colorScheme.onSurfaceVariant)),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: AppFilledButton(
+                          label: 'Import',
+                          onPressed: () async {
+                            final code = codeController.text;
+                            final importedRoutine = Routine.fromShareCode(code);
+
+                            if (importedRoutine != null) {
+                              await routinesBox.add(importedRoutine.toMap());
+                              if (!context.mounted) return;
+                              Navigator.pop(context);
+                              _loadData();
+                              _showTopSuccessToast(
+                                  'Successfully imported "${importedRoutine.title}"! 🏋️‍♂️');
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                      'Invalid share code. Please try again! ⚠️'),
+                                  backgroundColor: Colors.redAccent,
+                                ),
+                              );
+                            }
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -150,8 +285,7 @@ class _HomePageState extends State<HomePage> {
                 // 2. Edit Routine
                 ListTile(
                   leading: const Icon(Icons.edit_outlined,
-                      color: Colors
-                          .orangeAccent), // Lăsat portocaliu pentru UX intuitiv de editare
+                      color: Colors.orangeAccent),
                   title: const Text('Edit Routine'),
                   onTap: () async {
                     Navigator.pop(context);
@@ -169,25 +303,21 @@ class _HomePageState extends State<HomePage> {
                 // 3. Share Routine
                 ListTile(
                   leading: Icon(Icons.share_outlined,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant),
+                      color: Theme.of(context).colorScheme.primary),
                   title: const Text('Share Routine'),
-                  subtitle: Text('Future feature 🚀',
-                      style: TextStyle(
-                          fontSize: 11,
-                          color:
-                              Theme.of(context).colorScheme.onSurfaceVariant)),
-                  onTap: () {
+                  subtitle: const Text('Copy share code to clipboard 📋'),
+                  onTap: () async {
                     Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text(
-                              'Sharing will be available in a future update!')),
-                    );
+                    final shareCode = routine.toShareCode();
+                    await Clipboard.setData(ClipboardData(text: shareCode));
+                    if (!context.mounted) return;
+                    _showTopSuccessToast(
+                        '"${routine.title}" code copied successfully! 🦾');
                   },
                 ),
                 const Divider(),
 
-                // 4. Delete Routine (Cu prompt de confirmare)
+                // 4. Delete Routine
                 ListTile(
                   leading:
                       const Icon(Icons.delete_outline, color: Colors.redAccent),
@@ -247,6 +377,8 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('GymTracker'),
@@ -263,8 +395,7 @@ class _HomePageState extends State<HomePage> {
                   padding: const EdgeInsets.symmetric(
                       horizontal: 16.0, vertical: 8.0),
                   child: Card(
-                    color: Colors.amber.withOpacity(
-                        0.12), // Păstrat un pic amber pentru atenție (Avertisment)
+                    color: Colors.amber.withOpacity(0.12),
                     shape: RoundedRectangleBorder(
                       side: const BorderSide(color: Colors.amber, width: 1.2),
                       borderRadius: BorderRadius.circular(12),
@@ -314,25 +445,91 @@ class _HomePageState extends State<HomePage> {
                 ),
               ],
 
+              // 3. SECȚIUNEA DE HEADER PENTRU RUTINE + ACȚIUNI
               Padding(
                 padding:
-                    const EdgeInsets.only(left: 18.0, top: 16.0, bottom: 8.0),
-                child: Text('Routines',
-                    style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w500,
-                        color: Theme.of(context)
-                            .colorScheme
-                            .onSurfaceVariant)), // Text Muted global
+                    const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Routines',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        // Butonul New Routine redesenat compact pe rând
+                        Expanded(
+                          flex: 3,
+                          child: OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              side: BorderSide(
+                                  color: theme.colorScheme.primary
+                                      .withOpacity(0.5)),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10)),
+                            ),
+                            icon: Icon(Icons.playlist_add,
+                                color: theme.colorScheme.primary),
+                            label: Text(
+                              'New Routine',
+                              style: TextStyle(
+                                  color: theme.colorScheme.primary,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                            onPressed: () async {
+                              await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (context) =>
+                                        const RoutineFormPage()),
+                              );
+                              _loadData();
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        // Noul buton de Import Routine cu logo dedicat (Folder cu Săgeată în jos / Download)
+                        Expanded(
+                          flex: 2,
+                          child: OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              side: BorderSide(
+                                  color: theme.colorScheme.onSurfaceVariant
+                                      .withOpacity(0.3)),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10)),
+                            ),
+                            icon: Icon(Icons.folder_zip_outlined,
+                                color: theme.colorScheme.onSurfaceVariant),
+                            label: Text(
+                              'Import',
+                              style: TextStyle(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w600),
+                            ),
+                            onPressed: _showImportRoutineSheet,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
 
-              // 3. LISTA DE RUTINE
+              // 4. LISTA DE RUTINE
               if (_routineEntries.isEmpty)
                 Padding(
                   padding: const EdgeInsets.all(32.0),
                   child: Center(
                       child: Text(
-                          'No routines found. Create your first one below!',
+                          'No routines found. Create your first one above!',
                           style: Theme.of(context).textTheme.bodyMedium)),
                 )
               else
@@ -363,7 +560,6 @@ class _HomePageState extends State<HomePage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // Titlul și cele 3 puncte orizontale
                               Row(
                                 mainAxisAlignment:
                                     MainAxisAlignment.spaceBetween,
@@ -386,8 +582,6 @@ class _HomePageState extends State<HomePage> {
                                   ),
                                 ],
                               ),
-
-                              // Lista compactă cu numele exercițiilor (Folosește bodyMedium text-muted automat)
                               Text(
                                 exercisesPreview,
                                 style: Theme.of(context).textTheme.bodyMedium,
@@ -395,8 +589,6 @@ class _HomePageState extends State<HomePage> {
                                 overflow: TextOverflow.ellipsis,
                               ),
                               const SizedBox(height: 16),
-
-                              // Noul buton modern pentru începerea antrenamentului
                               AppGhostButton(
                                 label: 'Start Workout',
                                 icon: Icons.play_arrow,
@@ -407,42 +599,115 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ));
                 }),
-
-              const SizedBox(height: 12),
-
-              // 4. BUTONUL DE LA FINAL: NEW ROUTINE
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                child: ListTile(
-                  shape: RoundedRectangleBorder(
-                    side: BorderSide(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .onSurfaceVariant
-                            .withOpacity(0.2),
-                        width: 1,
-                        style: BorderStyle.solid),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  leading: Icon(Icons.playlist_add,
-                      color: Theme.of(context).colorScheme.primary),
-                  title: Text('New Routine',
-                      style: TextStyle(
-                          color: Theme.of(context).colorScheme.primary,
-                          fontWeight: FontWeight.bold)),
-                  onTap: () async {
-                    await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (context) => const RoutineFormPage()),
-                    );
-                    _loadData();
-                  },
-                ),
-              ),
               const SizedBox(height: 40),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Structura pentru _TopToastWidget rămâne neschimbată...
+
+class _TopToastWidget extends StatefulWidget {
+  final String message;
+  final VoidCallback onDismiss;
+
+  const _TopToastWidget({required this.message, required this.onDismiss});
+
+  @override
+  State<_TopToastWidget> createState() => _TopToastWidgetState();
+}
+
+class _TopToastWidgetState extends State<_TopToastWidget>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<Offset> _offsetAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    // Configurația animației (durata de intrare/ieșire)
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 400),
+      vsync: this,
+    );
+
+    _offsetAnimation = Tween<Offset>(
+      begin: const Offset(0.0, -1.5), // Pornește de deasupra ecranului
+      end: Offset.zero, // Se oprește în poziția naturală
+    ).animate(CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOutBack, // Efect elastic discret la coborâre
+    ));
+
+    _controller.forward(); // Pornim animația de intrare
+
+    // Programăm dispariția automată după 2.5 secunde
+    Future.delayed(const Duration(milliseconds: 2500), () async {
+      if (mounted) {
+        await _controller.reverse(); // Animație de retragere în sus
+        widget.onDismiss();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: SlideTransition(
+        position: _offsetAnimation,
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: Padding(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0, vertical: 14.0),
+                decoration: BoxDecoration(
+                  // Nuanță modernă de verde emerald închis cu accent vibrant
+                  color: const Color(0xFF0F5132),
+                  borderRadius: BorderRadius.circular(12),
+                  border:
+                      Border.all(color: const Color(0xFF198754), width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.3),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    )
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.check_circle,
+                        color: Color(0xFF25D366), size: 22),
+                    const SizedBox(width: 12),
+                    Flexible(
+                      child: Text(
+                        widget.message,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
       ),

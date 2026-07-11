@@ -69,7 +69,7 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
       final matchesSearch =
           exercise.name.toLowerCase().contains(_searchQuery.toLowerCase());
       final matchesMuscle = _selectedMuscleFilter == null ||
-          exercise.muscleGroups.contains(_selectedMuscleFilter);
+          exercise.primaryMuscles.any((m) => m.group == _selectedMuscleFilter);
       final matchesEquipment = _selectedEquipmentFilter == null ||
           exercise.equipment == _selectedEquipmentFilter;
       return matchesSearch && matchesMuscle && matchesEquipment;
@@ -331,9 +331,9 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
                         final exercise = _filteredExercises[index];
                         final isSelected = _isExerciseSelected(exercise);
 
-                        final primaryMuscle = exercise.muscleGroups.isNotEmpty
-                            ? exercise.muscleGroups.first.name
-                            : 'core';
+                        final primaryMuscle = exercise.primaryMuscles.isNotEmpty
+                            ? exercise.primaryMuscles.first.label
+                            : 'Core';
                         final subtitleText =
                             '${primaryMuscle.toUpperCase()} • ${exercise.equipment.name.toUpperCase()}';
 

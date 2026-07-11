@@ -27,9 +27,9 @@ void main() async {
 
   // Dacă vrei să forțezi curățarea datelor vechi (la schimbarea de modele),
   // poți decomenta linia de mai jos o singură dată:
-  // await exercisesBox.clear();
-  // await routinesBox.clear();
-  // await logsBox.clear();
+  await exercisesBox.clear();
+  await routinesBox.clear();
+  await logsBox.clear();
 
   // Dacă aplicația e proaspăt instalată, citim JSON-ul din assets și populăm Hive
   await _seedDatabaseFromJsonIfNeeded();
@@ -40,60 +40,37 @@ void main() async {
 Future<void> _seedDatabaseFromJsonIfNeeded() async {
   if (exercisesBox.isEmpty) {
     try {
-      // 1. Citim fișierul JSON text din folderul assets
+      // 1. Citim fișierul JSON brut din assets
       final String jsonString =
           await rootBundle.loadString('assets/exercises_init.json');
       final List<dynamic> jsonList = jsonDecode(jsonString);
 
-      // 2. Parcurgem lista și salvăm fiecare exercițiu în Hive sub formă de Map
       for (var item in jsonList) {
-        // Mapăm array-ul de string-uri din JSON în Enums pentru listă
-        final List<dynamic> rawGroups = item['muscleGroups'] ?? [];
-        final List<MuscleGroup> parsedGroups = rawGroups.map((g) {
-          return MuscleGroup.values.firstWhere(
-            (e) => e.name == g,
-            orElse: () => MuscleGroup.core,
-          );
-        }).toList();
-
-        if (parsedGroups.isEmpty) parsedGroups.add(MuscleGroup.core);
-
-        final exercise = Exercise(
-          name: item['name'] as String,
-          muscleGroups: parsedGroups,
-          equipment: Equipment.values.firstWhere(
-            (e) => e.name == item['equipment'],
-            orElse: () => Equipment.bodyweight,
-          ),
-          mechanics: Mechanics.values.firstWhere(
-            (e) => e.name == item['mechanics'],
-            orElse: () => Mechanics.compound,
-          ),
-          instructions: List<String>.from(item['instructions'] ?? []),
-          assetImagePath: item['assetImagePath'] as String?,
-        );
-
-        // Folosim numele ca cheie unică (put în loc de add)
-        await exercisesBox.put(exercise.name, exercise.toMap());
+        if (item is Map<String, dynamic>) {
+          final exercise = Exercise.fromJson(item);
+          await exercisesBox.put(exercise.id, exercise.toMap());
+        }
       }
 
-      // 3. Generăm automat și o rutină "Full Body" ca să ai pe ce da click în ecranul principal
+      // 3. Generăm o rutină "Full Body Starter" ca demo
       if (exercisesBox.isNotEmpty && routinesBox.isEmpty) {
+        // Luăm primele 3 exerciții din baza proaspăt populată
         final initialExercises = exercisesBox.values
             .take(3)
             .map((e) => Exercise.fromMap(e as Map))
             .toList();
 
         final sampleRoutine = Routine(
-          title: 'Full Body Starter',
-          description: 'Loaded completely from your custom JSON list.',
+          title: 'Full Body Starter 🏋️‍♂️',
+          description: 'A sample routine generated as a starter',
           exercises: initialExercises,
         );
 
         await routinesBox.add(sampleRoutine.toMap());
       }
 
-      debugPrint('✅ Hive base successfully seeded from new JSON schema!');
+      debugPrint(
+          '✅ Hive database successfully seeded using the smart Exercise.fromJson factory!');
     } catch (e) {
       debugPrint('❌ Error seeding Hive database: $e');
     }

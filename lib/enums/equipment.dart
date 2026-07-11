@@ -1,1 +1,20 @@
-enum Equipment { barbell, dumbbell, machine, cables, bodyweight, bands }
+enum Equipment { 
+  band,
+  barbell,
+  bodyweight,
+  bosuBall,
+  cables,
+  cardio, 
+  dumbbells,
+  kettlebells,
+  machine,
+  medicineBall,
+  pilates,
+  plate,
+  recovery,
+  smithMachine,
+  stretches,
+  trx,
+  vitruvian,
+  yoga
+}

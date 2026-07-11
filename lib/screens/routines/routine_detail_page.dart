@@ -230,9 +230,9 @@ class _RoutineDetailPageState extends State<RoutineDetailPage> {
                     itemBuilder: (context, index) {
                       final exercise = widget.routine.exercises[index];
 
-                      final primaryMuscle = exercise.muscleGroups.isNotEmpty
-                          ? exercise.muscleGroups.first.name.toUpperCase()
-                          : 'CORE';
+                      final primaryMuscle = exercise.primaryMuscles.isNotEmpty
+                          ? exercise.primaryMuscles.first.group.name
+                          : 'Core';
 
                       return Card(
                         margin: const EdgeInsets.only(bottom: 12),

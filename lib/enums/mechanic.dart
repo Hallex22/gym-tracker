@@ -1,0 +1,1 @@
+enum Mechanic { compound, isolation }

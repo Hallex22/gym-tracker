@@ -1,0 +1,106 @@
+[
+  {
+    "name": "Barbell Bench Press",
+    "muscleGroups": ["chest", "shoulders", "arms"],
+    "equipment": "barbell",
+    "mechanics": "compound",
+    "instructions": [
+      "Lie flat on the bench with your feet flat on the floor.",
+      "Grip the barbell with hands slightly wider than shoulder-width.",
+      "Unrack the bar and lower it slowly to your mid-chest.",
+      "Push the bar back up powerfully until your arms are fully extended."
+    ],
+    "assetImagePath": null
+  },
+  {
+    "name": "Incline Dumbbell Press",
+    "muscleGroups": ["chest", "shoulders", "arms"],
+    "equipment": "dumbbell",
+    "mechanics": "compound",
+    "instructions": [
+      "Set an adjustable bench to an incline of 30-45 degrees.",
+      "Lie back on the bench holding a dumbbell in each hand at chest level.",
+      "Press the weights straight up over your chest until arms are locked.",
+      "Lower the dumbbells slowly back down to the starting position."
+    ],
+    "assetImagePath": null
+  },
+  {
+    "name": "Barbell Squat",
+    "muscleGroups": ["legs", "core"],
+    "equipment": "barbell",
+    "mechanics": "compound",
+    "instructions": [
+      "Rest the barbell securely on your upper back/traps.",
+      "Stand with feet shoulder-width apart, toes pointing slightly out.",
+      "Lower your body by bending your knees and driving your hips back.",
+      "Break parallel, then push through your heels to return to a standing position."
+    ],
+    "assetImagePath": null
+  },
+  {
+    "name": "Pull-Up",
+    "muscleGroups": ["back", "arms", "core"],
+    "equipment": "bodyweight",
+    "mechanics": "compound",
+    "instructions": [
+      "Grip the pull-up bar with hands wider than shoulder-width apart, palms facing away.",
+      "Hang with your arms fully extended (dead hang).",
+      "Pull your body up by driving your elbows down until your chin clears the bar.",
+      "Lower yourself back down with control to the starting position."
+    ],
+    "assetImagePath": null
+  },
+  {
+    "name": "Barbell Row",
+    "muscleGroups": ["back", "arms", "core"],
+    "equipment": "barbell",
+    "mechanics": "compound",
+    "instructions": [
+      "Hold a barbell with a shoulder-width grip, palms facing down.",
+      "Hinge at your hips and bend your knees slightly, keeping your back completely flat.",
+      "Pull the bar toward your lower chest, squeezing your shoulder blades together.",
+      "Slowly lower the barbell back to the starting position."
+    ],
+    "assetImagePath": null
+  },
+  {
+    "name": "Dumbbell Overhead Press",
+    "muscleGroups": ["shoulders", "arms", "core"],
+    "equipment": "dumbbell",
+    "mechanics": "compound",
+    "instructions": [
+      "Sit on a bench with back support or stand straight up.",
+      "Hold dumbbells at shoulder height with an overhand grip (palms facing forward).",
+      "Press the weights directly overhead until your arms are fully extended.",
+      "Lower the dumbbells back to shoulder height with control."
+    ],
+    "assetImagePath": null
+  },
+  {
+    "name": "Dumbbell Bicep Curl",
+    "muscleGroups": ["arms"],
+    "equipment": "dumbbell",
+    "mechanics": "isolation",
+    "instructions": [
+      "Stand straight with a dumbbell in each hand, arms extended, palms facing forward.",
+      "Keep your elbows tucked close to your torso.",
+      "Curl the weights upward by contracting your biceps while keeping upper arms stationary.",
+      "Slowly lower the dumbbells back down to the initial position."
+    ],
+    "assetImagePath": null
+  },
+  {
+    "name": "Cable Tricep Pushdown",
+    "muscleGroups": ["arms"],
+    "equipment": "cables",
+    "mechanics": "isolation",
+    "instructions": [
+      "Attach a rope or straight bar to a high pulley cable station.",
+      "Grip the attachment and step back slightly, pinning your elbows to your ribs.",
+      "Push the attachment down by extending your elbows until arms are straight.",
+      "Squeeze your triceps at the bottom, then return slowly to the starting point."
+    ],
+    "assetImagePath": null
+  }
+]

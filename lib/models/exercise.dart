@@ -1,60 +1,184 @@
+import 'package:gym_tracker/enums/grip.dart';
+
 import '../enums/enums.dart';
 
 class Exercise {
+  final int id;
   final String name;
-  final List<MuscleGroup> muscleGroups; // Lista completă (Prima poziție = Grupa Principală)
+  final String sourceUrl;
+
+  final String? coverImage;
+
   final Equipment equipment;
-  final Mechanics mechanics;
+  final Mechanic? mechanic;
+  final Force? force;
+  final List<Grip> grips;
+  final Difficulty difficulty;
   final List<String> instructions;
-  final String? assetImagePath;
+
+  final List<MuscleTarget> primaryMuscles;
+  final List<MuscleTarget> secondaryMuscles;
+  final List<MuscleTarget> tertiaryMuscles;
 
   const Exercise({
+    required this.id,
     required this.name,
-    required this.muscleGroups,
+    required this.sourceUrl,
+    this.coverImage,
     required this.equipment,
-    required this.mechanics,
+    this.mechanic,
+    this.force,
+    required this.grips,
+    required this.difficulty,
     required this.instructions,
-    this.assetImagePath,
+    required this.primaryMuscles,
+    required this.secondaryMuscles,
+    required this.tertiaryMuscles,
   });
 
   Map<String, dynamic> toMap() => {
+        'id': id,
         'name': name,
-        // Convertim lista de Enums într-o listă de String-uri pentru Hive
-        'muscleGroups': muscleGroups.map((e) => e.name).toList(),
+        'sourceUrl': sourceUrl,
+        'coverImage': coverImage,
         'equipment': equipment.name,
-        'mechanics': mechanics.name,
+        'mechanic': mechanic?.name,
+        'force': force?.name,
+        'grips': grips.map((g) => g.name).toList(),
+        'difficulty': difficulty.name,
         'instructions': instructions,
-        'assetImagePath': assetImagePath,
+        'primaryMuscles': primaryMuscles.map((m) => m.toMap()).toList(),
+        'secondaryMuscles': secondaryMuscles.map((m) => m.toMap()).toList(),
+        'tertiaryMuscles': tertiaryMuscles.map((m) => m.toMap()).toList(),
       };
 
   factory Exercise.fromMap(Map<dynamic, dynamic> map) {
-    // Reconstruim lista de Enums din lista de String-uri salvată în Hive
-    final List<dynamic> rawGroups = map['muscleGroups'] ?? [];
-    final List<MuscleGroup> parsedGroups = rawGroups.map((groupName) {
-      return MuscleGroup.values.firstWhere(
-        (e) => e.name == groupName,
-        orElse: () => MuscleGroup.chest,
-      );
-    }).toList();
-
-    // Fallback în caz că lista salvată era goală din vreun motiv
-    if (parsedGroups.isEmpty) {
-      parsedGroups.add(MuscleGroup.chest);
+    List<MuscleTarget> parseMuscleList(dynamic rawList) {
+      if (rawList == null || rawList is! List) return [];
+      return rawList.map((m) => MuscleTarget.fromMap(m as Map)).toList();
     }
 
     return Exercise(
-      name: map['name'] as String,
-      muscleGroups: parsedGroups,
+      id: map['id'] as int? ?? 0,
+      name: map['name'] as String? ?? '',
+      sourceUrl: map['sourceUrl'] as String? ?? '',
+      coverImage: map['coverImage'] as String?,
       equipment: Equipment.values.firstWhere(
         (e) => e.name == map['equipment'],
         orElse: () => Equipment.bodyweight,
       ),
-      mechanics: Mechanics.values.firstWhere(
-        (e) => e.name == map['mechanics'],
-        orElse: () => Mechanics.compound,
+      mechanic: map['mechanic'] != null
+          ? Mechanic.values.firstWhere((m) => m.name == map['mechanic'])
+          : null,
+      force: map['force'] != null
+          ? Force.values.firstWhere((f) => f.name == map['force'])
+          : null,
+      grips: (map['grips'] as List? ?? [])
+          .map((g) => Grip.values.firstWhere((v) => v.name == g))
+          .toList(),
+      difficulty: Difficulty.values.firstWhere(
+        (d) => d.name == map['difficulty'],
+        orElse: () => Difficulty.beginner,
       ),
       instructions: List<String>.from(map['instructions'] ?? []),
-      assetImagePath: map['assetImagePath'] as String?,
+      primaryMuscles: parseMuscleList(map['primaryMuscles']),
+      secondaryMuscles: parseMuscleList(map['secondaryMuscles']),
+      tertiaryMuscles: parseMuscleList(map['tertiaryMuscles']),
+    );
+  }
+
+  factory Exercise.fromJson(Map<String, dynamic> json) {
+    // Parsăm map-ul imbricat de mușchi din JSON-ul de scraping
+    final musclesJson = json['muscles'] as Map<String, dynamic>? ?? {};
+
+    List<MuscleTarget> parseMuscleListJson(dynamic list) {
+      if (list == null || list is! List) return [];
+      return list
+          .map((m) => MuscleTarget.fromJson(m as Map<String, dynamic>))
+          .toList();
+    }
+
+    return Exercise(
+      id: json['id'] as int? ?? 0,
+      name: json['name'] as String? ?? '',
+      sourceUrl: json['sourceUrl'] as String? ?? '',
+      coverImage: json['coverImage'] as String?,
+      // Mapare sigură pentru Enum-uri din textul brut primit de la scraper
+      equipment: Equipment.values.firstWhere(
+        (e) =>
+            e.name.toLowerCase() ==
+            (json['equipment'] as String? ?? '').toLowerCase().trim(),
+        orElse: () => Equipment.bodyweight,
+      ),
+      mechanic: json['mechanic'] != null
+          ? Mechanic.values.firstWhere((m) =>
+              m.name.toLowerCase() ==
+              json['mechanic'].toString().toLowerCase().trim())
+          : null,
+      force: json['force'] != null
+          ? Force.values.firstWhere((f) =>
+              f.name.toLowerCase() ==
+              json['force'].toString().toLowerCase().trim())
+          : null,
+      grips: (json['grips'] as List? ?? [])
+          .map((g) => Grip.values.firstWhere(
+              (v) => v.name.toLowerCase() == g.toString().toLowerCase().trim()))
+          .toList(),
+      difficulty: Difficulty.values.firstWhere(
+        (d) =>
+            d.name.toLowerCase() ==
+            (json['difficulty'] as String? ?? '').toLowerCase().trim(),
+        orElse: () => Difficulty.beginner,
+      ),
+      instructions: List<String>.from(json['instructions'] ?? []),
+      primaryMuscles: parseMuscleListJson(musclesJson['primary']),
+      secondaryMuscles: parseMuscleListJson(musclesJson['secondary']),
+      tertiaryMuscles: parseMuscleListJson(musclesJson['tertiary']),
+    );
+  }
+}
+
+// ---------------------------------------------------
+// Muscle Target
+class MuscleTarget {
+  final MuscleGroup group;
+  final String? detail;
+
+  const MuscleTarget({required this.group, this.detail});
+
+  /// 💡 UX Benefit: Returnează detaliul specific dacă există, altfel grupa mare text.
+  String get label => detail ?? group.name;
+
+  // Pentru Scraper-ul tău JSON
+  factory MuscleTarget.fromJson(Map<String, dynamic> json) {
+    final rawGroup = json['group'] as String? ?? 'chest';
+    return MuscleTarget(
+      group: MuscleGroup.values.firstWhere(
+        (e) => e.name.toLowerCase() == rawGroup.toLowerCase().trim(),
+        orElse: () => MuscleGroup.unknown,
+      ),
+      detail: json['detail'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'group': group.name,
+        'detail': detail,
+      };
+
+  // Pentru stocarea locală Hive
+  Map<String, dynamic> toMap() => {
+        'group': group.name,
+        'detail': detail,
+      };
+
+  factory MuscleTarget.fromMap(Map<dynamic, dynamic> map) {
+    return MuscleTarget(
+      group: MuscleGroup.values.firstWhere(
+        (e) => e.name == map['group'],
+        orElse: () => MuscleGroup.unknown,
+      ),
+      detail: map['detail'] as String?,
     );
   }
 }

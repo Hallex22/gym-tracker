@@ -1,1 +1,21 @@
-enum MuscleGroup { chest, back, legs, shoulders, biceps, triceps, core, cardio }
+enum MuscleGroup {
+  abdominals,
+  biceps,
+  calves,
+  chest,
+  feet,
+  forearms,
+  glutes,
+  groin,
+  hamstrings,
+  lats,
+  lowerBack,
+  neck,
+  obliques,
+  quads,
+  shoulders,
+  traps,
+  trapsMidBack,
+  triceps,
+  unknown
+}

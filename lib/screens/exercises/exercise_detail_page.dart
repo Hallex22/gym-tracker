@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../enums/enums.dart';
-import '../../models/models.dart';
+import '../../../enums/enums.dart';
+import '../../../models/models.dart';
 
 class ExerciseDetailPage extends StatelessWidget {
   final Exercise exercise;
@@ -10,9 +10,12 @@ class ExerciseDetailPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Grupa principală este prima din listă, restul sunt secundare
-    final primaryMuscle =
-        exercise.muscleGroups.isNotEmpty ? exercise.muscleGroups.first : null;
-    final secondaryMuscles = exercise.muscleGroups.skip(1).toList();
+    final primaryMuscle = exercise.primaryMuscles.isNotEmpty
+        ? exercise.primaryMuscles.first
+        : null;
+
+// 2. Luăm direct lista completă de mușchi secundari pe care am salvat-o din JSON
+    final secondaryMuscles = exercise.secondaryMuscles;
 
     return Scaffold(
       appBar: AppBar(
@@ -25,11 +28,11 @@ class ExerciseDetailPage extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // --- SECȚIUNEA ASSET (Imagine / Placeholder) ---
-            if (exercise.assetImagePath != null)
+            if (exercise.coverImage != null)
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: Image.asset(
-                  exercise.assetImagePath!,
+                  'assets/${exercise.coverImage}',
                   height: 200,
                   width: double.infinity,
                   fit: BoxFit.cover,
@@ -81,7 +84,8 @@ class ExerciseDetailPage extends StatelessWidget {
                 if (primaryMuscle != null)
                   _buildInfoChip(
                     context: context,
-                    label: 'Target: ${primaryMuscle.name.toUpperCase()}',
+                    label:
+                        'Target: ${primaryMuscle?.group.name.toUpperCase() ?? 'UNKNOWN'}',
                     useSecondaryColor: false, // Va folosi Primary (Mov Vibrant)
                   ),
                 _buildInfoChip(
@@ -92,7 +96,7 @@ class ExerciseDetailPage extends StatelessWidget {
                 ),
                 _buildInfoChip(
                   context: context,
-                  label: exercise.mechanics.name.toUpperCase(),
+                  label: exercise.mechanic?.name.toUpperCase() ?? 'N/A',
                   useSecondaryColor: false,
                 ),
               ],
@@ -117,7 +121,7 @@ class ExerciseDetailPage extends StatelessWidget {
                 children: secondaryMuscles.map((muscle) {
                   return Chip(
                     label: Text(
-                      muscle.name.toUpperCase(),
+                      muscle.label.toUpperCase(),
                       style: TextStyle(
                         fontSize: 11,
                         color: Theme.of(context).colorScheme.onSurface,
@@ -137,7 +141,8 @@ class ExerciseDetailPage extends StatelessWidget {
               const SizedBox(height: 20),
             ],
 
-            Divider(color: Theme.of(context).colorScheme.primary.withOpacity(0.2)),
+            Divider(
+                color: Theme.of(context).colorScheme.primary.withOpacity(0.2)),
             const SizedBox(height: 10),
 
             // --- INSTRUCȚIUNI PAS CU PAS ---
