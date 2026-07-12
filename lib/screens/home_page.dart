@@ -637,7 +637,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
                   final String exercisesPreview = routine.exercises.isEmpty
                       ? "No exercises added yet"
-                      : routine.exercises.map((e) => e.name).join(', ');
+                      : routine.exercises.map((e) {
+                          final rawExercise = exercisesBox.get(e.exerciseId);
+                          String name = 'Unknown';
+                          if (rawExercise != null) {
+                            name = rawExercise is Map
+                                ? (rawExercise['name'] ?? 'Unknown')
+                                : rawExercise.name;
+                          }
+                          // 🦾 Adăugăm numărul de seturi direct în string-ul de preview
+                          return "$name (${e.targetSetsCount}x)";
+                        }).join(', ');
 
                   return Card(
                       margin: const EdgeInsets.symmetric(

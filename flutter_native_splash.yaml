@@ -1,0 +1,15 @@
+# #0F0E17
+
+flutter_native_splash:
+  # Culoarea de fundal a ecranului (folosește codul tău de hex din temă)
+  color: "#0F0E17"
+
+  # Calea către logo-ul tău (recomandat un PNG cu fundal transparent)
+  image: assets/images/app_logo.png
+
+  # Setări specifice pentru Android / iOS
+  android_12:
+    color: "#0F0E17"
+    image: assets/images/app_logo.png
+
+  web: false

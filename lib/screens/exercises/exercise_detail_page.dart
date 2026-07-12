@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart'; // 💡 Necesar pentru deschiderea link-ului Muscle Wiki
 import '../../../enums/enums.dart';
 import '../../../models/models.dart';
 
@@ -7,20 +8,58 @@ class ExerciseDetailPage extends StatelessWidget {
 
   const ExerciseDetailPage({super.key, required this.exercise});
 
+  // --- METODĂ DESCHIDERE URL (MUSCLE WIKI) ---
+  Future<void> _launchSourceUrl(BuildContext context) async {
+    final Uri url = Uri.parse(exercise.sourceUrl);
+    try {
+      // 💡 Folosim inAppBrowserView pentru o experiență mult mai integrată și fluidă
+      await launchUrl(url, mode: LaunchMode.inAppBrowserView);
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open the link. 🌐')),
+      );
+    }
+  }
+
+  // --- HELPER DIFICULTATE (CULORI DINAMICE STYLE HEAVY) ---
+  Color _getDifficultyColor(Difficulty diff, ThemeData theme) {
+    switch (diff.name.toLowerCase()) {
+      case 'beginner':
+        return Colors.lightGreenAccent;
+      case 'intermediate':
+        return Colors.orangeAccent;
+      case 'advanced':
+      case 'expert':
+        return Colors.redAccent;
+      default:
+        return theme.colorScheme.primary;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Grupa principală este prima din listă, restul sunt secundare
+    final theme = Theme.of(context);
+
     final primaryMuscle = exercise.primaryMuscles.isNotEmpty
         ? exercise.primaryMuscles.first
         : null;
-
-// 2. Luăm direct lista completă de mușchi secundari pe care am salvat-o din JSON
     final secondaryMuscles = exercise.secondaryMuscles;
+    final tertiaryMuscles = exercise.tertiaryMuscles;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(exercise.name),
-        centerTitle: true,
+        centerTitle: false, // Forțat elegant la stânga pentru consistență
+        actions: [
+          // 💡 WEB LINK CĂTRE MUSCLE WIKI IN APP BAR
+          IconButton(
+            icon: Icon(Icons.open_in_new_rounded,
+                color: theme.colorScheme.primary, size: 22),
+            tooltip: 'Open in Muscle Wiki',
+            onPressed: () => _launchSourceUrl(context),
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
@@ -43,40 +82,30 @@ class ExerciseDetailPage extends StatelessWidget {
                 height: 160,
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  color:
-                      Theme.of(context).colorScheme.primary.withOpacity(0.05),
+                  color: theme.colorScheme.primary.withOpacity(0.05),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .primary
-                          .withOpacity(0.15)),
+                      color: theme.colorScheme.primary.withOpacity(0.15)),
                 ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
-                      Icons.fitness_center,
-                      size: 48,
-                      color: Theme.of(context)
-                          .colorScheme
-                          .primary
-                          .withOpacity(0.4),
-                    ),
+                    Icon(Icons.fitness_center,
+                        size: 48,
+                        color: theme.colorScheme.primary.withOpacity(0.4)),
                     const SizedBox(height: 8),
                     Text(
                       'No preview image available',
                       style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        fontSize: 13,
-                      ),
+                          color: theme.colorScheme.onSurfaceVariant,
+                          fontSize: 13),
                     ),
                   ],
                 ),
               ),
             const SizedBox(height: 20),
 
-            // --- INFO TAGS (Echipament, Mecanică, Grupa Principală) ---
+            // --- INFO TAGS COMPREHENSIVE (Echipament, Mecanică, Forță, Dificultate) ---
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -84,83 +113,119 @@ class ExerciseDetailPage extends StatelessWidget {
                 if (primaryMuscle != null)
                   _buildInfoChip(
                     context: context,
-                    label:
-                        'Target: ${primaryMuscle?.group.name.toUpperCase() ?? 'UNKNOWN'}',
-                    useSecondaryColor: false, // Va folosi Primary (Mov Vibrant)
+                    label: 'TARGET: ${primaryMuscle.group.name.toUpperCase()}',
+                    color: theme.colorScheme.primary,
                   ),
                 _buildInfoChip(
                   context: context,
                   label: exercise.equipment.name.toUpperCase(),
-                  useSecondaryColor:
-                      true, // Va folosi Secondary (Mov Neon) pentru contrast
+                  color: theme.colorScheme.secondary,
                 ),
+                if (exercise.mechanic != null)
+                  _buildInfoChip(
+                    context: context,
+                    label: exercise.mechanic!.name.toUpperCase(),
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                // 💡 NOU: Tipul de Forță (Push / Pull / Static)
+                if (exercise.force != null)
+                  _buildInfoChip(
+                    context: context,
+                    label: 'FORCE: ${exercise.force!.name.toUpperCase()}',
+                    color: theme.colorScheme.tertiary,
+                  ),
+                // 💡 NOU: Dificultate inteligentă (Color-coded)
                 _buildInfoChip(
                   context: context,
-                  label: exercise.mechanic?.name.toUpperCase() ?? 'N/A',
-                  useSecondaryColor: false,
+                  label: exercise.difficulty.name.toUpperCase(),
+                  color: _getDifficultyColor(exercise.difficulty, theme),
                 ),
               ],
             ),
             const SizedBox(height: 20),
 
-            // --- GRUPE MUSCULARE SECUNDARE ---
-            if (secondaryMuscles.isNotEmpty) ...[
-              Text(
-                'Secondary Muscles Covered',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurfaceVariant, // Muted text
-                ),
-              ),
-              const SizedBox(height: 6),
-              Wrap(
-                spacing: 6,
-                children: secondaryMuscles.map((muscle) {
-                  return Chip(
-                    label: Text(
-                      muscle.label.toUpperCase(),
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                    ),
-                    padding: EdgeInsets.zero,
-                    visualDensity: VisualDensity.compact,
-                    backgroundColor: Theme.of(context).colorScheme.surface,
-                    side: BorderSide(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .onSurfaceVariant
-                            .withOpacity(0.2)),
-                  );
-                }).toList(),
+            // --- 💡 NOU: SECȚIUNE TIPURI DE PRIZĂ (GRIPS) ---
+            if (exercise.grips.isNotEmpty) ...[
+              Row(
+                children: [
+                  Icon(Icons.front_hand_outlined,
+                      size: 16, color: theme.colorScheme.onSurfaceVariant),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Required Grip: ',
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                  Text(
+                    exercise.grips.map((g) => g.name.toUpperCase()).join(', '),
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.onSurface),
+                  ),
+                ],
               ),
               const SizedBox(height: 20),
             ],
 
-            Divider(
-                color: Theme.of(context).colorScheme.primary.withOpacity(0.2)),
+            // --- TARGET MUSCULAR (SECUNDAR & TERȚIAR) ---
+            if (secondaryMuscles.isNotEmpty || tertiaryMuscles.isNotEmpty) ...[
+              Text(
+                'Muscles Recruited',
+                style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.onSurface),
+              ),
+              const SizedBox(height: 8),
+
+              // Mușchi Secundari
+              if (secondaryMuscles.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8.0),
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: secondaryMuscles.map((muscle) {
+                      return _buildMuscleBadge(
+                          context, muscle.label.toUpperCase(),
+                          isSecondary: true);
+                    }).toList(),
+                  ),
+                ),
+
+              // 💡 NOU: Mușchi Terțiari (Afișați mai subtil / opacity mai mică)
+              if (tertiaryMuscles.isNotEmpty)
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: tertiaryMuscles.map((muscle) {
+                    return _buildMuscleBadge(
+                        context, muscle.label.toUpperCase(),
+                        isSecondary: false);
+                  }).toList(),
+                ),
+              const SizedBox(height: 24),
+            ],
+
+            Divider(color: theme.colorScheme.primary.withOpacity(0.2)),
             const SizedBox(height: 10),
 
             // --- INSTRUCȚIUNI PAS CU PAS ---
             Text(
               'Instructions',
               style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color:
-                    Theme.of(context).colorScheme.onSurface, // Important (Alb)
-              ),
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.onSurface),
             ),
             const SizedBox(height: 12),
             if (exercise.instructions.isEmpty)
               Text(
                 'No instructions available for this exercise.',
-                style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant),
+                style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
               )
             else
               ListView.builder(
@@ -175,19 +240,14 @@ class ExerciseDetailPage extends StatelessWidget {
                       children: [
                         CircleAvatar(
                           radius: 11,
-                          backgroundColor: Theme.of(context)
-                              .colorScheme
-                              .primary
-                              .withOpacity(0.15),
+                          backgroundColor:
+                              theme.colorScheme.primary.withOpacity(0.15),
                           child: Text(
                             '${index + 1}',
                             style: TextStyle(
-                              fontSize: 11,
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .primary, // Cifrele sunt mov
-                              fontWeight: FontWeight.bold,
-                            ),
+                                fontSize: 11,
+                                color: theme.colorScheme.primary,
+                                fontWeight: FontWeight.bold),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -195,12 +255,9 @@ class ExerciseDetailPage extends StatelessWidget {
                           child: Text(
                             exercise.instructions[index],
                             style: TextStyle(
-                              fontSize: 14,
-                              height: 1.4,
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant, // Text normal (Muted)
-                            ),
+                                fontSize: 14,
+                                height: 1.4,
+                                color: theme.colorScheme.onSurfaceVariant),
                           ),
                         ),
                       ],
@@ -208,37 +265,69 @@ class ExerciseDetailPage extends StatelessWidget {
                   );
                 },
               ),
+
+            // --- 💡 NOU: FOOTER DE TIP BUTON LINK SPRE SURSĂ EXTENDED ---
+            const SizedBox(height: 16),
+            Center(
+              child: TextButton.icon(
+                onPressed: () => _launchSourceUrl(context),
+                icon: const Icon(Icons.language, size: 16),
+                label: const Text('Read full breakdown on MuscleWiki',
+                    style: TextStyle(
+                        fontSize: 13, decoration: TextDecoration.underline)),
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  // --- WIDGET HELPER CONFIGURAT PE TEMĂ ---
+  // --- WIDGET HELPER INTEGRAT PE DETALII DE CULOARE ---
   Widget _buildInfoChip({
     required BuildContext context,
     required String label,
-    required bool useSecondaryColor,
+    required Color color,
   }) {
-    // Alegem între nuanța Primary (Mov Vibrant) sau Secondary (Mov Neon)
-    final Color chosenColor = useSecondaryColor
-        ? Theme.of(context).colorScheme.secondary
-        : Theme.of(context).colorScheme.primary;
-
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: chosenColor.withOpacity(0.12),
+        color: color.withOpacity(0.1),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: chosenColor.withOpacity(0.3)),
+        border: Border.all(color: color.withOpacity(0.25)),
+      ),
+      child: Text(
+        label,
+        style:
+            TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 11),
+      ),
+    );
+  }
+
+  // --- HELPER BADGE CONTEXTUAL PENTRU MUSCHI SECUNDARI/TERȚIARI ---
+  Widget _buildMuscleBadge(BuildContext context, String label,
+      {required bool isSecondary}) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: isSecondary
+            ? theme.colorScheme.surfaceContainerLow
+            : theme.colorScheme.surfaceContainerLowest.withOpacity(0.4),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+            color: isSecondary
+                ? theme.colorScheme.onSurfaceVariant.withOpacity(0.15)
+                : theme.colorScheme.onSurfaceVariant.withOpacity(0.05)),
       ),
       child: Text(
         label,
         style: TextStyle(
-          color: chosenColor,
-          fontWeight: FontWeight.bold,
-          fontSize: 11,
-        ),
+            fontSize: 10,
+            fontWeight: isSecondary ? FontWeight.w600 : FontWeight.normal,
+            color: isSecondary
+                ? theme.colorScheme.onSurface
+                : theme.colorScheme.onSurfaceVariant),
       ),
     );
   }

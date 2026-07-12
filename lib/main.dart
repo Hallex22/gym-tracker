@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'theme/app_theme.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:path_provider/path_provider.dart';
@@ -14,9 +15,9 @@ late Box routinesBox;
 late Box logsBox;
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
 
-  // Găsim folderul sigur unde sistemul de operare ne lasă să salvăm datele
   final dir = await getApplicationDocumentsDirectory();
   Hive.init(dir.path);
 
@@ -28,11 +29,13 @@ void main() async {
   // Dacă vrei să forțezi curățarea datelor vechi (la schimbarea de modele),
   // poți decomenta linia de mai jos o singură dată:
   // await exercisesBox.clear();
-  // await routinesBox.clear();
-  // await logsBox.clear();
+  await routinesBox.clear();
+  await logsBox.clear();
 
   // Dacă aplicația e proaspăt instalată, citim JSON-ul din assets și populăm Hive
   await _seedDatabaseFromJsonIfNeeded();
+
+  FlutterNativeSplash.remove();
 
   runApp(const GymTrackerApp());
 }

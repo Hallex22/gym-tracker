@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../enums/enums.dart';
-import '../../main.dart'; // Pentru accesul la routinesBox
+import '../../main.dart'; // Pentru accesul la routinesBox și exercisesBox
 import '../../models/models.dart';
 import '../../widgets/app_buttons.dart'; // Importul butoanelor reutilizabile
 import '../exercises/exercise_selection_page.dart';
@@ -20,7 +20,9 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
 
   late String _title;
   late String _description;
-  final List<Exercise> _selectedExercises = [];
+
+  // 💡 SCHIMBAT: Acum lucrăm cu RoutineExercise în loc de Exercise
+  final List<RoutineExercise> _selectedRoutineExercises = [];
 
   bool get _isEditMode => widget.routine != null;
 
@@ -30,18 +32,25 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
     _title = widget.routine?.title ?? '';
     _description = widget.routine?.description ?? '';
     if (widget.routine != null) {
-      _selectedExercises.addAll(widget.routine!.exercises);
+      // Copiem exercițiile existente (creăm instanțe noi pentru a nu muta direct referințele din Hive)
+      for (var ex in widget.routine!.exercises) {
+        _selectedRoutineExercises.add(RoutineExercise(
+          exerciseId: ex.exerciseId,
+          targetSetsCount: ex.targetSetsCount,
+        ));
+      }
     }
   }
 
   // --- DIALOG CONFIRMARE SCOATERE EXERCIȚIU DIN LISTĂ ---
-  Future<void> _confirmRemoveExercise(Exercise exercise) async {
+  Future<void> _confirmRemoveExercise(
+      RoutineExercise routineEx, String exerciseName) async {
     final bool confirm = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
             title: const Text('Remove Exercise? 📝'),
             content: Text(
-                'Are you sure you want to remove "${exercise.name}" from this routine?'),
+                'Are you sure you want to remove "$exerciseName" from this routine?'),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
@@ -63,15 +72,15 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
 
     if (confirm) {
       setState(() {
-        // 💡 OPTIMIZARE: Eliminăm din starea locală pe bază de ID numeric rapid
-        _selectedExercises.removeWhere((e) => e.id == exercise.id);
+        _selectedRoutineExercises
+            .removeWhere((e) => e.exerciseId == routineEx.exerciseId);
       });
     }
   }
 
   Future<void> _saveRoutine() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_selectedExercises.isEmpty) {
+    if (_selectedRoutineExercises.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
             content: Text('Please select at least one exercise! ⚠️')),
@@ -81,10 +90,11 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
 
     _formKey.currentState!.save();
 
+    // Construim obiectul de tip Routine cu noua structură de List<RoutineExercise>
     final routineData = Routine(
       title: _title,
       description: _description.isEmpty ? null : _description,
-      exercises: _selectedExercises,
+      exercises: _selectedRoutineExercises,
     );
 
     if (_isEditMode) {
@@ -116,8 +126,8 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
             onPressed: () => Navigator.pop(context, false),
             child: Text(
               'Cancel',
-              style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant),
+              style:
+                  TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
           ),
           TextButton(
@@ -140,20 +150,15 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    // Definirea stilului comun pentru borduri inteligente
     final inputDecorationTheme = InputDecoration(
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(
-          color: theme.colorScheme.primary.withOpacity(0.2),
-        ),
+        borderSide:
+            BorderSide(color: theme.colorScheme.primary.withOpacity(0.2)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(
-          color: theme.colorScheme.primary,
-          width: 1.5,
-        ),
+        borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.5),
       ),
     );
 
@@ -167,8 +172,7 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
               onPressed: _deleteRoutine,
             ),
           IconButton(
-            icon: Icon(Icons.save,
-                color: theme.colorScheme.primary, size: 28),
+            icon: Icon(Icons.save, color: theme.colorScheme.primary, size: 28),
             onPressed: _saveRoutine,
           )
         ],
@@ -180,100 +184,183 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
           key: _formKey,
           child: Column(
             children: [
-              // --- SECȚIUNEA INTRODUCERE DATE (TITLU & DESCRIERE) ---
+              // --- SECȚIUNEA INTRODUCERE DATE ---
               Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
                   children: [
                     TextFormField(
                       initialValue: _title,
-                      decoration: inputDecorationTheme.copyWith(
-                        labelText: 'Routine Title',
-                      ),
-                      validator: (value) =>
-                          value == null || value.trim().isEmpty
-                              ? 'Title is required'
-                              : null,
+                      decoration:
+                          inputDecorationTheme.copyWith(labelText: 'Routine Title'),
+                      validator: (value) => value == null || value.trim().isEmpty
+                          ? 'Title is required'
+                          : null,
                       onSaved: (value) => _title = value!.trim(),
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
                       initialValue: _description,
                       decoration: inputDecorationTheme.copyWith(
-                        labelText: 'Description / Notes (Optional)',
-                      ),
+                          labelText: 'Description / Notes (Optional)'),
                       onSaved: (value) => _description = value ?? '',
                     ),
                   ],
                 ),
               ),
 
-              // --- STRUCTURA RUTINEI (AFIȘARE EXERCIȚII SELECTATE) ---
-              if (_selectedExercises.isNotEmpty) ...[
+              // --- STRUCTURA RUTINEI (AFIȘARE DINAMICĂ CU NUMĂR DE SETURI) ---
+              if (_selectedRoutineExercises.isNotEmpty) ...[
                 Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16.0, vertical: 4.0),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
                   child: Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
                       'Routine Structure (Hold & Drag to reorder):',
                       style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.onSurfaceVariant),
                     ),
                   ),
                 ),
                 Expanded(
                   child: Container(
-                    margin:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                     child: ReorderableListView.builder(
-                      itemCount: _selectedExercises.length,
-                      onReorderItem: (oldIndex, newIndex) {
+                      itemCount: _selectedRoutineExercises.length,
+                      // 🔧 FIX: parametrul corect e `onReorder`, nu `onReorderItem`
+                      // (altfel nu compilează / crapă la reordonare).
+                      onReorder: (oldIndex, newIndex) {
                         setState(() {
-                          final item = _selectedExercises.removeAt(oldIndex);
-                          _selectedExercises.insert(newIndex, item);
+                          if (newIndex > oldIndex) newIndex -= 1;
+                          final item =
+                              _selectedRoutineExercises.removeAt(oldIndex);
+                          _selectedRoutineExercises.insert(newIndex, item);
                         });
                       },
                       itemBuilder: (context, index) {
-                        final ex = _selectedExercises[index];
-                        final primaryMuscle = ex.primaryMuscles.isNotEmpty
-                            ? ex.primaryMuscles.first.group
-                            : null;
-                        
-                        // 💡 Corectat textul din enum-uri să se formateze curat
-                        final muscleName = primaryMuscle != null ? primaryMuscle.name.toUpperCase() : 'CORE';
-                        final extraInfo = '$muscleName • ${ex.equipment.name.toUpperCase()}';
+                        final routineEx = _selectedRoutineExercises[index];
 
+                        // 💡 Obținem datele complete ale exercițiului global din Hive pentru UI
+                        final rawEx = exercisesBox.get(routineEx.exerciseId);
+
+                        String exerciseName = 'Unknown Exercise';
+                        String extraInfo = 'CORE • BODYWEIGHT';
+
+                        if (rawEx != null) {
+                          final exInstance =
+                              rawEx is Map ? Exercise.fromMap(rawEx) : rawEx as Exercise;
+                          exerciseName = exInstance.name;
+                          final primaryMuscle = exInstance.primaryMuscles.isNotEmpty
+                              ? exInstance.primaryMuscles.first.group
+                              : null;
+                          final muscleName = primaryMuscle != null
+                              ? primaryMuscle.name.toUpperCase()
+                              : 'CORE';
+                          extraInfo =
+                              '$muscleName • ${exInstance.equipment.name.toUpperCase()}';
+                        }
+
+                        // 🔧 REFACTOR LAYOUT: in loc de un singur ListTile care inghesuia
+                        // totul pe un rand (drag handle + titlu + subtitlu + counter + X),
+                        // acum avem 2 randuri explicite:
+                        //   Rand 1: drag handle + titlu ..................... X (dreapta cardului)
+                        //   Rand 2: muschi/echipament ......... -  3x  +
                         return Card(
-                          // 💡 Modificat cheia unică să fie bazată pe ID, evitând bug-uri la exerciții cu nume identice
-                          key: ValueKey('selected_vert_${ex.id}_$index'),
+                          key: ValueKey(
+                              'selected_routine_ex_${routineEx.exerciseId}_$index'),
                           margin: const EdgeInsets.symmetric(vertical: 4),
                           elevation: 0,
-                          child: ListTile(
-                            dense: true,
-                            leading: Icon(Icons.drag_handle,
-                                color: theme.colorScheme.primary),
-                            title: Text(
-                              ex.name,
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: theme.colorScheme.onSurface,
-                              ),
-                            ),
-                            subtitle: Text(
-                              extraInfo,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                            trailing: IconButton(
-                              icon: const Icon(Icons.close,
-                                  color: Colors.redAccent, size: 18),
-                              onPressed: () => _confirmRemoveExercise(ex),
+                          child: Padding(
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // --- Rand 1: drag handle + titlu + buton X ---
+                                Row(
+                                  children: [
+                                    Icon(Icons.drag_handle,
+                                        color: theme.colorScheme.primary),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        exerciseName,
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 15,
+                                            color: theme.colorScheme.onSurface),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.close,
+                                          color: Colors.redAccent, size: 20),
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
+                                      onPressed: () => _confirmRemoveExercise(
+                                          routineEx, exerciseName),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                // --- Rand 2: muschi/echipament + contor seturi ---
+                                Row(
+                                  children: [
+                                    // ofsetam textul cat sa se alinieze sub titlu, nu sub drag handle
+                                    const SizedBox(width: 34),
+                                    Expanded(
+                                      child: Text(
+                                        extraInfo,
+                                        style: TextStyle(
+                                            fontSize: 11,
+                                            color:
+                                                theme.colorScheme.onSurfaceVariant),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: Icon(Icons.remove_circle_outline,
+                                          size: 18,
+                                          color: theme.colorScheme.onSurfaceVariant),
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
+                                      onPressed: () {
+                                        if (routineEx.targetSetsCount > 1) {
+                                          setState(() {
+                                            routineEx.targetSetsCount--;
+                                          });
+                                        }
+                                      },
+                                    ),
+                                    Container(
+                                      constraints:
+                                          const BoxConstraints(minWidth: 32),
+                                      alignment: Alignment.center,
+                                      child: Text(
+                                        '${routineEx.targetSetsCount}x',
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: theme.colorScheme.primary,
+                                            fontSize: 13),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: Icon(Icons.add_circle_outline,
+                                          size: 18, color: theme.colorScheme.primary),
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
+                                      onPressed: () {
+                                        setState(() {
+                                          routineEx.targetSetsCount++;
+                                        });
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
                           ),
                         );
@@ -287,15 +374,14 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
                     child: Text(
                       'No exercises added yet.\nTap below to start building! 🛠️',
                       textAlign: TextAlign.center,
-                      style: TextStyle(
-                          color: theme.colorScheme.onSurfaceVariant,
-                          fontSize: 15),
+                      style:
+                          TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 15),
                     ),
                   ),
                 ),
               ],
 
-              // --- COMPONENTA REUTILIZABILĂ CURENTĂ DE ADĂUGARE ---
+              // --- BUTONUL DE ADĂUGARE EXERCIȚII ---
               SafeArea(
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
@@ -303,22 +389,29 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
                     label: 'Add Exercises',
                     icon: Icons.add,
                     onPressed: () async {
-                      // 💡 Pasăm doar ID-urile exercițiilor selectate curent, păstrând transferul lightweight (RAM minim)
-                      final List<int> currentActiveIds = _selectedExercises.map((e) => e.id).toList();
+                      // Pasăm ID-urile deja selectate pentru a le marca/bloca în ecranul următor
+                      final List<int> currentActiveIds =
+                          _selectedRoutineExercises.map((e) => e.exerciseId).toList();
 
                       final List<Exercise>? result =
                           await Navigator.push<List<Exercise>>(
                         context,
                         MaterialPageRoute(
                           builder: (context) => ExerciseSelectionPage(
-                            existingExercisesIds: currentActiveIds, // 💡 Trimitem ID-urile către noua proprietate
+                            existingExercisesIds: currentActiveIds,
                           ),
                         ),
                       );
 
+                      // Când primim înapoi lista de obiecte Exercise, le convertim în structuri RoutineExercise
                       if (result != null && result.isNotEmpty) {
                         setState(() {
-                          _selectedExercises.addAll(result);
+                          for (var newEx in result) {
+                            _selectedRoutineExercises.add(RoutineExercise(
+                              exerciseId: newEx.id,
+                              targetSetsCount: 3, // Încep direct cu default de 3 seturi
+                            ));
+                          }
                         });
                       }
                     },

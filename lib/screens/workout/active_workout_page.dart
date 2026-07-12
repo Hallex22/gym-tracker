@@ -86,19 +86,31 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
       });
     } else {
       _sessionStart = DateTime.now();
-      for (var exercise in widget.routine.exercises) {
-        final prevLog = _getPreviousLogForExercise(exercise.id);
+      // 🔧 REFACTOR: widget.routine.exercises este acum List<RoutineExercise>
+      // (are .exerciseId si .targetSetsCount), nu mai e List<Exercise> cu .id.
+      for (var routineExercise in widget.routine.exercises) {
+        final exerciseId = routineExercise.exerciseId;
+        final prevLog = _getPreviousLogForExercise(exerciseId);
+
+        // Folosim targetSetsCount din rutina ca sa generam automat cate
+        // seturi are exercitiul, in loc de un singur set gol implicit.
+        final targetSets =
+            routineExercise.targetSetsCount > 0
+                ? routineExercise.targetSetsCount
+                : 1;
+
+        final initialSets = List<LoggedSet>.generate(targetSets, (index) {
+          if (prevLog != null && index < prevLog.sets.length) {
+            final prevSet = prevLog.sets[index];
+            return LoggedSet(weight: prevSet.weight, reps: prevSet.reps);
+          }
+          return const LoggedSet(weight: 0.0, reps: 0);
+        });
 
         _activeExercises.add(
           LoggedExercise(
-            exerciseId: exercise.id,
-            sets: [
-              prevLog != null && prevLog.sets.isNotEmpty
-                  ? LoggedSet(
-                      weight: prevLog.sets.first.weight,
-                      reps: prevLog.sets.first.reps)
-                  : const LoggedSet(weight: 0.0, reps: 0)
-            ],
+            exerciseId: exerciseId,
+            sets: initialSets,
           ),
         );
       }
@@ -143,7 +155,7 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Durata a fost actualizată la $targetMinutes min! ⏱️'),
+        content: Text('Duration updated to $targetMinutes min! ⏱️'),
       ),
     );
   }
@@ -171,7 +183,7 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Use this if you forgot to hit Start on time. The session`s start time will be recalculated automatically',
+              "Use this if you forgot to hit Start on time. The session's start time will be recalculated automatically.",
               style: TextStyle(
                   color: theme.colorScheme.onSurfaceVariant, fontSize: 13),
             ),
@@ -606,7 +618,40 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                 ),
               ),
               Expanded(
-                child: ReorderableListView.builder(
+                child: _activeExercises.isEmpty
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24.0),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                '🏋️',
+                                style: const TextStyle(fontSize: 48),
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                'No exercises yet',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: theme.colorScheme.onSurface,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Tap "Add Alternative Exercise" below to get started.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    : ReorderableListView.builder(
                   itemCount: _activeExercises.length,
                   // 🔧 FIX: parametrul corect este `onReorder`, nu `onReorderItem`,
                   // si trebuie ajustat newIndex cand se muta in jos in lista.
