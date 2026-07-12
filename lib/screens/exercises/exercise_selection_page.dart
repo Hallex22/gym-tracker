@@ -3,9 +3,9 @@ import '../../enums/enums.dart';
 import '../../main.dart'; // Pentru accesul la exercisesBox
 import '../../models/models.dart';
 import '../../widgets/app_buttons.dart';
+import '../exercises/exercise_detail_page.dart'; // Import corect pentru navigare detalii
 
 class ExerciseSelectionPage extends StatefulWidget {
-  // 💡 Modificat: Primim acum o listă lightweight de ID-uri (int)
   final List<int>? existingExercisesIds;
 
   const ExerciseSelectionPage({
@@ -22,7 +22,6 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
   List<Exercise> _allAvailableExercises = [];
   String _searchQuery = '';
 
-  // Stări pentru filtre complexe
   MuscleGroup? _selectedMuscleFilter;
   Equipment? _selectedEquipmentFilter;
 
@@ -37,11 +36,9 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
         exercisesBox.values.map((e) => Exercise.fromMap(e as Map)).toList();
 
     setState(() {
-      // 💡 REPARAT: Folosim corect lista de ID-uri primită prin constructor pentru excludere
       if (widget.existingExercisesIds != null &&
           widget.existingExercisesIds!.isNotEmpty) {
         final excludedIds = widget.existingExercisesIds!.toSet();
-        // Păstrăm doar exercițiile care NU se află în lista de excluse
         _allAvailableExercises =
             exercises.where((ex) => !excludedIds.contains(ex.id)).toList();
       } else {
@@ -52,7 +49,6 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
 
   void _toggleExerciseSelection(Exercise exercise) {
     setState(() {
-      // 💡 OPTIMIZARE: Verificarea selecției se face acum după ID (int), nu după string name
       final index =
           _newSelectedExercises.indexWhere((e) => e.id == exercise.id);
       if (index >= 0) {
@@ -64,7 +60,6 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
   }
 
   bool _isExerciseSelected(Exercise exercise) {
-    // 💡 OPTIMIZARE: Căutare ultra-rapidă după ID numeric
     return _newSelectedExercises.any((e) => e.id == exercise.id);
   }
 
@@ -88,7 +83,6 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
     });
   }
 
-  // --- REUTILIZABIL: MENIU DE SELECȚIE (BOTTOM SHEET) ---
   void _showFilterSelector<T>({
     required String title,
     required List<T> values,
@@ -133,7 +127,7 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
                         Theme.of(context).colorScheme.primary.withOpacity(0.2)),
                 Expanded(
                   child: ListView.builder(
-                    itemCount: values.length + 1, // +1 pentru opțiunea "All"
+                    itemCount: values.length + 1,
                     itemBuilder: (context, index) {
                       if (index == 0) {
                         return ListTile(
@@ -189,7 +183,7 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
       body: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () {
-          FocusScope.of(context).unfocus(); // Închide tastatura nativă
+          FocusScope.of(context).unfocus();
         },
         child: Column(
           children: [
@@ -217,7 +211,6 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
                   const SizedBox(height: 12),
                   Row(
                     children: [
-                      // Buton Filtru Mușchi
                       Expanded(
                         child: OutlinedButton.icon(
                           style: OutlinedButton.styleFrom(
@@ -252,8 +245,6 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
                         ),
                       ),
                       const SizedBox(width: 8),
-
-                      // Buton Filtru Echipament
                       Expanded(
                         child: OutlinedButton.icon(
                           style: OutlinedButton.styleFrom(
@@ -287,7 +278,6 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
                           ),
                         ),
                       ),
-
                       if (hasActiveFilters) ...[
                         const SizedBox(width: 4),
                         IconButton(
@@ -332,31 +322,126 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
                         final subtitleText =
                             '${primaryMuscle.toUpperCase()} • ${exercise.equipment.name.toUpperCase()}';
 
+                        // Logică imagine (la fel ca în ActiveWorkoutPage)
+                        final coverImage = exercise.coverImage;
+                        final isImageEmpty =
+                            coverImage == null || coverImage.trim().isEmpty;
+
                         return Card(
                           margin: const EdgeInsets.symmetric(vertical: 4),
                           elevation: 0,
-                          child: CheckboxListTile(
-                            title: Text(
-                              exercise.name,
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: theme.colorScheme.onSurface,
-                              ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: Row(
+                              children: [
+                                // 💡 ZONA CLICKABILĂ PENTRU DETALII (Imagine + Text)
+                                Expanded(
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(8),
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              ExerciseDetailPage(
+                                                  exercise: exercise),
+                                        ),
+                                      );
+                                    },
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(4.0),
+                                      child: Row(
+                                        children: [
+                                          // Avatarul cu poza exercițiului
+                                          CircleAvatar(
+                                            radius: 24,
+                                            backgroundColor: theme.colorScheme
+                                                .surfaceContainerHighest,
+                                            backgroundImage: !isImageEmpty
+                                                ? AssetImage(
+                                                    'assets/$coverImage')
+                                                : null,
+                                            child: isImageEmpty
+                                                ? Icon(
+                                                    Icons.image_not_supported,
+                                                    size: 16,
+                                                    color: theme.colorScheme
+                                                        .onSurfaceVariant)
+                                                : null,
+                                          ),
+                                          const SizedBox(width: 12),
+
+                                          // Titlul și Subtitlul exercițiului
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  exercise.name,
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.bold,
+                                                    color: theme
+                                                        .colorScheme.onSurface,
+                                                    fontSize: 14,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  subtitleText,
+                                                  style: TextStyle(
+                                                      fontSize: 10,
+                                                      color: theme.colorScheme
+                                                          .onSurfaceVariant),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+
+                                // 💡 CERCUL CUSTOM PENTRU SELECȚIE (Fie cerc cu plus, fie bifat)
+                                Padding(
+                                  padding: const EdgeInsets.only(
+                                      left: 8.0, right: 4.0),
+                                  child: InkWell(
+                                    onTap: () =>
+                                        _toggleExerciseSelection(exercise),
+                                    borderRadius: BorderRadius.circular(100),
+                                    child: AnimatedContainer(
+                                      duration:
+                                          const Duration(milliseconds: 200),
+                                      width: 32,
+                                      height: 32,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: isSelected
+                                            ? theme.colorScheme.primary
+                                            : theme.colorScheme
+                                                .surfaceContainerHighest,
+                                        border: Border.all(
+                                          color: isSelected
+                                              ? theme.colorScheme.primary
+                                              : theme
+                                                  .colorScheme.primary.withOpacity(0.2),
+                                          width: 1.5,
+                                        ),
+                                      ),
+                                      child: Icon(
+                                        isSelected ? Icons.check : Icons.add,
+                                        size: 18,
+                                        color: isSelected
+                                            ? theme.colorScheme.onPrimary
+                                            : theme.colorScheme.primary,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                            subtitle: Text(
-                              subtitleText,
-                              style: TextStyle(
-                                  fontSize: 11,
-                                  color: theme.colorScheme.onSurfaceVariant),
-                            ),
-                            value: isSelected,
-                            activeColor: theme.colorScheme.primary,
-                            checkColor: theme.colorScheme.onPrimary,
-                            onChanged: (bool? value) =>
-                                _toggleExerciseSelection(exercise),
-                            controlAffinity: ListTileControlAffinity.trailing,
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8)),
                           ),
                         );
                       },

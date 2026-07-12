@@ -6,6 +6,7 @@ import 'package:gym_tracker/screens/routines/routine_detail_page.dart';
 import 'package:gym_tracker/screens/routines/routine_form_page.dart';
 import '../main.dart';
 import '../models/models.dart';
+import '../widgets/app_actions_sheet.dart';
 import 'workout/active_workout_page.dart';
 import 'package:gym_tracker/widgets/app_buttons.dart';
 
@@ -322,105 +323,71 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   // --- DRAWER-UL DE JOS PENTRU OPȚIUNI (MODAL BOTTOM SHEET) ---
   void _showRoutineOptionsSheet(
       BuildContext context, Routine routine, dynamic routineKey) {
-    showModalBottomSheet(
+    // 💡 Apelăm direct componenta noastră reutilizabilă și upgradată
+    AppActionsSheet.show(
       context: context,
-      builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurfaceVariant
-                        .withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16.0, vertical: 8.0),
-                  child: Text(
-                    routine.title,
-                    style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-                const Divider(),
-                ListTile(
-                  leading: Icon(Icons.visibility_outlined,
-                      color: Theme.of(context).colorScheme.primary),
-                  title: const Text('View Routine'),
-                  onTap: () async {
-                    Navigator.pop(context);
-                    await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => RoutineDetailPage(
-                            routine: routine, routineKey: routineKey),
-                      ),
-                    );
-                    _loadData();
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.edit_outlined,
-                      color: Colors.orangeAccent),
-                  title: const Text('Edit Routine'),
-                  onTap: () async {
-                    Navigator.pop(context);
-                    await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => RoutineFormPage(
-                            routine: routine, routineKey: routineKey),
-                      ),
-                    );
-                    _loadData();
-                  },
-                ),
-                ListTile(
-                  leading: Icon(Icons.share_outlined,
-                      color: Theme.of(context).colorScheme.primary),
-                  title: const Text('Share Routine'),
-                  subtitle: const Text('Copy share code to clipboard 📋'),
-                  onTap: () async {
-                    Navigator.pop(context);
-                    final shareCode = routine.toShareCode();
-                    await Clipboard.setData(ClipboardData(text: shareCode));
-                    if (!context.mounted) return;
-                    _showTopSuccessToast(
-                        '"${routine.title}" code copied successfully! 🦾');
-                  },
-                ),
-                const Divider(),
-                ListTile(
-                  leading:
-                      const Icon(Icons.delete_outline, color: Colors.redAccent),
-                  title: const Text('Delete Routine',
-                      style: TextStyle(
-                          color: Colors.redAccent,
-                          fontWeight: FontWeight.w500)),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _showDeleteConfirmationDialog(
-                        context, routineKey, routine.title);
-                  },
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+      title: routine.title,
+      // subtitle: 'Manage routine options', // Opțional, poți pune și null
+      actions: [
+        // 1. Vizualizare
+        SheetActionItem(
+          icon: Icons.visibility_outlined,
+          label: 'View Routine',
+          onPressed: () async {
+            // Nu mai pui Navigator.pop aici, pentru că se ocupă componenta automat!
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) =>
+                    RoutineDetailPage(routine: routine, routineKey: routineKey),
+              ),
+            );
+            _loadData();
+          },
+        ),
+
+        // 2. Editare (cu culoarea portocalie pe care o aveai)
+        SheetActionItem(
+          icon: Icons.edit_outlined,
+          label: 'Edit Routine',
+          color: Colors.orangeAccent, // Își păstrează stilul custom
+          onPressed: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) =>
+                    RoutineFormPage(routine: routine, routineKey: routineKey),
+              ),
+            );
+            _loadData();
+          },
+        ),
+
+        // 3. Share (Notă: SheetActionItem-ul nostru simplu nu are proprietate de subtitle,
+        // dar label-ul e suficient de clar)
+        SheetActionItem(
+          icon: Icons.share_outlined,
+          label: 'Share Routine (Copy Code)',
+          onPressed: () async {
+            final shareCode = routine.toShareCode();
+            await Clipboard.setData(ClipboardData(text: shareCode));
+            if (!context.mounted) return;
+            _showTopSuccessToast(
+                '"${routine.title}" code copied successfully! 🦾');
+          },
+        ),
+
+        // 4. Ștergere (cu roșu, exact cum ai vrut)
+        SheetActionItem(
+          icon: Icons.delete_outline,
+          label: 'Delete Routine',
+          color: Colors
+              .redAccent, // 💡 Trick-ul cu roșu funcționează brici și aici
+          onPressed: () {
+            _showDeleteConfirmationDialog(context, routineKey, routine.title);
+          },
+        ),
+      ],
     );
   }
 
@@ -541,9 +508,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                             ),
                             IconButton(
                               icon: Icon(Icons.close,
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurface,
+                                  color:
+                                      Theme.of(context).colorScheme.onSurface,
                                   size: 20),
                               tooltip: 'Discard session',
                               onPressed: () {

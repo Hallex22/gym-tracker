@@ -127,6 +127,106 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
     await logsBox.put(_currentLogKey, currentLog.toMap());
   }
 
+  // 🔧 FIX: metoda folosea `_workoutStartTime` și `_showTopSuccessToast`, care nu
+  // existau in clasa (ar fi picat compilarea). Corectata sa foloseasca
+  // `_sessionStart` (variabila reala) si sa persiste imediat noul start time.
+  void _adjustLiveWorkoutDuration(int targetMinutes) {
+    setState(() {
+      // Schema: StartTime devine (Acum minus minutele dorite), astfel
+      // cronometrul calculeaza automat durata corecta la urmatorul tick.
+      _sessionStart =
+          DateTime.now().subtract(Duration(minutes: targetMinutes));
+    });
+
+    _updateLiveProgress();
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Durata a fost actualizată la $targetMinutes min! ⏱️'),
+      ),
+    );
+  }
+
+  // 🆕 Modala pentru editarea manuala a duratei (ex: utilizatorul a uitat
+  // sa apese Start la timp). Se deschide la tap pe statul "Duration".
+  Future<void> _showEditWorkoutDurationDialog() async {
+    final currentMinutes = DateTime.now().difference(_sessionStart).inMinutes;
+    final controller =
+        TextEditingController(text: currentMinutes.toString());
+    final theme = Theme.of(context);
+
+    final result = await showDialog<int>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'Edit workout duration',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: theme.colorScheme.onSurface,
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Use this if you forgot to hit Start on time. The session`s start time will be recalculated automatically',
+              style: TextStyle(
+                  color: theme.colorScheme.onSurfaceVariant, fontSize: 13),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Duration (minutes)',
+                border: OutlineInputBorder(),
+                suffixText: 'min',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          Row(
+            children: [
+              TextButton(
+                style: TextButton.styleFrom(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+                onPressed: () => Navigator.pop(context),
+                child: Text(
+                  'Cancel',
+                  style: TextStyle(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: AppFilledButton(
+                  label: 'Save',
+                  onPressed: () {
+                    final parsedMinutes =
+                        int.tryParse(controller.text.trim());
+                    Navigator.pop(context, parsedMinutes);
+                  },
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    if (result != null && result >= 0) {
+      _adjustLiveWorkoutDuration(result);
+    }
+  }
+
   Map<String, dynamic> _calculateCurrentStats() {
     final currentSnapshotLog = WorkoutLog(
       startTime: _sessionStart,
@@ -314,57 +414,73 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
   }
 
   Future<void> _navigateToSelectExercise() async {
+    // Colectăm ID-urile lightweight de la exercițiile deja active
     final List<int> existingIds =
         _activeExercises.map((e) => e.exerciseId).toList();
 
-    // 💡 Pasul 2: Navigăm către pagina ta existentă (presupunem că se numește AddExercisePage)
-    // și îi trimitem lista de ID-uri de exclus
-    final selectedExercise = await Navigator.push<Exercise>(
+    // 💡 SCHIMBARE: Schimbăm tipul generic din <Exercise> în <List<Exercise>>
+    final List<Exercise>? selectedExercises =
+        await Navigator.push<List<Exercise>>(
       context,
       MaterialPageRoute(
         builder: (context) => ExerciseSelectionPage(
-          existingExercisesIds: existingIds, // Transmitem lista mai departe
+          existingExercisesIds: existingIds,
         ),
       ),
     );
 
-    // 💡 Pasul 3: Dacă utilizatorul a selectat un exercițiu, îl adăugăm în listă
-    if (selectedExercise != null && mounted) {
+    // 💡 SCHIMBARE: Dacă utilizatorul a selectat unul sau mai multe exerciții, le adăugăm pe toate
+    if (selectedExercises != null && selectedExercises.isNotEmpty && mounted) {
       setState(() {
-        _activeExercises.add(
-          LoggedExercise(
-            exerciseId: selectedExercise.id,
-            sets: [const LoggedSet(weight: 0.0, reps: 0)],
-          ),
-        );
+        for (final ex in selectedExercises) {
+          _activeExercises.add(
+            LoggedExercise(
+              exerciseId: ex.id,
+              // Fiecare exercițiu nou pleacă cu un set gol implicit
+              sets: [const LoggedSet(weight: 0.0, reps: 0)],
+            ),
+          );
+        }
       });
       _updateLiveProgress();
     }
   }
 
-  Widget _buildLiveStatColumn(String label, String value, ThemeData theme) {
+  Widget _buildLiveStatColumn(String label, String value, ThemeData theme,
+      {VoidCallback? onTap}) {
+    final content = Column(
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: theme.colorScheme.primary,
+          ),
+        ),
+      ],
+    );
+
+    // 🔧 Expanded trebuie sa ramana copil direct al Row-ului parinte.
+    // GestureDetector-ul (daca exista) merge INAUNTRU lui Expanded, nu in jurul lui,
+    // altfel apare "Incorrect use of ParentDataWidget" la fiecare rebuild.
     return Expanded(
-      child: Column(
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: theme.colorScheme.primary,
-            ),
-          ),
-        ],
-      ),
+      child: onTap != null
+          ? GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onTap,
+              child: content,
+            )
+          : content,
     );
   }
 
@@ -478,8 +594,10 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
+                    // 🆕 Tap pe "Duration" deschide modala de editare a duratei/start time-ului.
                     _buildLiveStatColumn(
-                        'Duration', stats['durationStr'], theme),
+                        'Duration', stats['durationStr'], theme,
+                        onTap: _showEditWorkoutDurationDialog),
                     _buildLiveStatColumn('Volume',
                         '${stats['volume'].toStringAsFixed(0)} kg', theme),
                     _buildLiveStatColumn(

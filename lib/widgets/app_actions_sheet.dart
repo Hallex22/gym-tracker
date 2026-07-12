@@ -61,7 +61,8 @@ class AppActionsSheet extends StatelessWidget {
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment:
+            CrossAxisAlignment.center, // 💡 Aliniere centrală pe axa secundară
         children: [
           // Indicatorul vizual de tragere (băra de sus)
           Center(
@@ -75,21 +76,30 @@ class AppActionsSheet extends StatelessWidget {
               ),
             ),
           ),
-          // Titlu și Subtitlu (opțional)
+
+          // 💡 Titlu centrat text
           Text(
             title,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
           ),
+
+          // 💡 Subtitlu centrat text
           if (subtitle != null) ...[
             const SizedBox(height: 4),
             Text(
               subtitle!,
+              textAlign: TextAlign.center,
               style: TextStyle(
                   fontSize: 13, color: theme.colorScheme.onSurfaceVariant),
             ),
           ],
+
           const SizedBox(height: 12),
-          const Divider(),
+
+          // 💡 Divider upgradat cu primary.withOpacity(0.2)
+          Divider(color: theme.colorScheme.primary.withOpacity(0.2)),
+
           // Lista de acțiuni dinamice
           ListView.builder(
             shrinkWrap: true,
@@ -97,19 +107,21 @@ class AppActionsSheet extends StatelessWidget {
             itemCount: actions.length,
             itemBuilder: (context, index) {
               final action = actions[index];
-              final itemColor = action.color ?? theme.colorScheme.onSurface;
+
+              // 💡 Implicit folosește theme.colorScheme.onSurfaceVariant dacă nu pasăm o culoare custom (cum e roșul de delete)
+              final itemColor =
+                  action.color ?? theme.colorScheme.onSurfaceVariant;
 
               return ListTile(
                 leading: Icon(action.icon, color: itemColor),
                 title: Text(
                   action.label,
                   style:
-                      TextStyle(color: itemColor, fontWeight: FontWeight.w500),
+                      TextStyle(color: itemColor, fontWeight: FontWeight.w500, fontSize: 14),
                 ),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 8),
                 onTap: () {
-                  Navigator.pop(
-                      context); // Închide mai întâi drawer-ul/sheet-ul
+                  Navigator.pop(context); // Închide mai întâi drawer-ul
                   action.onPressed(); // Rulează acțiunea cerută
                 },
               );

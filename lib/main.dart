@@ -27,9 +27,9 @@ void main() async {
 
   // Dacă vrei să forțezi curățarea datelor vechi (la schimbarea de modele),
   // poți decomenta linia de mai jos o singură dată:
-  await exercisesBox.clear();
-  await routinesBox.clear();
-  await logsBox.clear();
+  // await exercisesBox.clear();
+  // await routinesBox.clear();
+  // await logsBox.clear();
 
   // Dacă aplicația e proaspăt instalată, citim JSON-ul din assets și populăm Hive
   await _seedDatabaseFromJsonIfNeeded();
