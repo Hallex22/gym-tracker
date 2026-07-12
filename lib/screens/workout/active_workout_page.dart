@@ -1,10 +1,13 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:gym_tracker/enums/workout_status.dart';
 import 'package:gym_tracker/screens/exercises/exercise_detail_page.dart';
+import 'package:gym_tracker/screens/exercises/exercise_selection_page.dart';
 import 'package:gym_tracker/widgets/app_buttons.dart';
 import '../../../main.dart';
 import '../../../models/models.dart';
 import '../../enums/enums.dart';
+import '../../widgets/app_actions_sheet.dart';
 
 class ActiveWorkoutPage extends StatefulWidget {
   final Routine routine;
@@ -15,24 +18,50 @@ class ActiveWorkoutPage extends StatefulWidget {
 }
 
 class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
-  // ACUM: Folosim direct modelul Dart în loc de Map raw
   final List<LoggedExercise> _activeExercises = [];
   dynamic _currentLogKey;
   late DateTime _sessionStart;
+  Timer? _liveTimer;
 
   late TextEditingController _titleController;
+
+  // 🔧 Cache exercitiu-complet indexat dupa id (Exercise.id -> Exercise).
+  // Construit o singura data, nu mai depinde de schema de chei din Hive
+  // (nu presupunem ca id-ul e chiar cheia din exercisesBox) si evita
+  // re-parsarea intregului box la fiecare tick al timerului live.
+  late Map<int, Exercise> _exerciseCache;
 
   @override
   void initState() {
     super.initState();
     _titleController = TextEditingController(text: widget.routine.title);
+    _buildExerciseCache();
     _loadOrInitializeWorkout();
+    _startLiveTimer();
   }
 
   @override
   void dispose() {
+    _liveTimer?.cancel();
     _titleController.dispose();
     super.dispose();
+  }
+
+  void _buildExerciseCache() {
+    _exerciseCache = {};
+    for (var raw in exercisesBox.values) {
+      final ex = Exercise.fromMap(raw as Map);
+      _exerciseCache[ex.id] = ex;
+    }
+  }
+
+  // Helper unic de lookup - foloseste-l peste tot in loc de exercisesBox.get(...)
+  Exercise? _resolveExercise(int exerciseId) => _exerciseCache[exerciseId];
+
+  void _startLiveTimer() {
+    _liveTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (mounted) setState(() {});
+    });
   }
 
   void _loadOrInitializeWorkout() {
@@ -58,11 +87,11 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
     } else {
       _sessionStart = DateTime.now();
       for (var exercise in widget.routine.exercises) {
-        final prevLog = _getPreviousLogForExercise(exercise.name);
+        final prevLog = _getPreviousLogForExercise(exercise.id);
 
         _activeExercises.add(
           LoggedExercise(
-            name: exercise.name,
+            exerciseId: exercise.id,
             sets: [
               prevLog != null && prevLog.sets.isNotEmpty
                   ? LoggedSet(
@@ -98,48 +127,52 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
     await logsBox.put(_currentLogKey, currentLog.toMap());
   }
 
-  // Folosește direct getter-ul optimizat din WorkoutLog sau calculează pe loc curat
   Map<String, dynamic> _calculateCurrentStats() {
-    double totalVolume = 0;
-    int totalSets = 0;
+    final currentSnapshotLog = WorkoutLog(
+      startTime: _sessionStart,
+      endTime: DateTime
+          .now(), // setăm temporar acum ca să funcționeze gettere-le duratei
+      routineTitle: _titleController.text.trim(),
+      exercises: List.from(_activeExercises),
+      status: WorkoutStatus.started,
+    );
 
-    for (var ex in _activeExercises) {
-      for (var set in ex.sets) {
-        if (set.reps > 0) {
-          totalVolume += set.weight * set.reps;
-          totalSets++;
-        }
-      }
-    }
+    final difference = DateTime.now().difference(_sessionStart);
+    final hours = difference.inHours;
+    final minutes =
+        difference.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds =
+        difference.inSeconds.remainder(60).toString().padLeft(2, '0');
 
-    final currentDuration = DateTime.now().difference(_sessionStart).inMinutes;
+    String durationString = hours > 0
+        ? '${hours.toString().padLeft(2, '0')}:$minutes:$seconds'
+        : '$minutes:$seconds';
 
     return {
-      'duration': currentDuration,
-      'volume': totalVolume,
-      'setsCount': totalSets,
+      'durationStr': durationString,
+      'durationMin': difference.inMinutes,
       'exercisesCount': _activeExercises.length,
+      'volume': currentSnapshotLog.totalVolume,
+      'setsCount': currentSnapshotLog.totalSetsCount
     };
   }
 
-  LoggedExercise? _getPreviousLogForExercise(String exerciseName) {
-    // Luăm toate logurile, le inversăm ca să începem cu cele mai recente
+  LoggedExercise? _getPreviousLogForExercise(int exerciseId) {
     final allLogs = logsBox.values
         .map((e) => WorkoutLog.fromMap(e as Map))
         .toList()
         .reversed;
 
     for (var log in allLogs) {
-      // Căutăm doar în antrenamentele finalizate cu succes
       if (log.status == WorkoutStatus.finished) {
         for (var ex in log.exercises) {
-          if (ex.name == exerciseName) {
-            return ex; // Am găsit exact ce a făcut tura trecută!
+          if (ex.exerciseId == exerciseId) {
+            return ex;
           }
         }
       }
     }
-    return null; // Nu s-a mai antrenat la acest exercițiu până acum
+    return null;
   }
 
   Future<void> _showFinishConfirmationDialog() async {
@@ -153,7 +186,7 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
           'Finish Workout? 🏆',
           style: TextStyle(
             fontWeight: FontWeight.bold,
-            color: theme.colorScheme.onSurface, // Titlul primește onSurface
+            color: theme.colorScheme.onSurface,
           ),
         ),
         content: Column(
@@ -162,35 +195,25 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
           children: [
             Text(
               'Are you sure you want to complete this workout session? Here is your summary:',
-              style: TextStyle(
-                color: theme.colorScheme
-                    .onSurfaceVariant, // Textul general primește onSurfaceVariant
-              ),
+              style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
             ),
             const SizedBox(height: 16),
             Card(
-              color: theme.colorScheme.primary
-                  .withOpacity(0.05), // Fundal foarte fin
+              color: theme.colorScheme.primary.withOpacity(0.05),
               elevation: 0,
               child: Padding(
                 padding: const EdgeInsets.all(12.0),
                 child: Column(
                   children: [
-                    _buildStatRow(
-                        Icons.timer, 'Duration:', '${stats['duration']} min'),
-                    Divider(
-                        color: theme.colorScheme.primary
-                            .withOpacity(0.2)), // Culoare custom divider
+                    _buildStatRow(Icons.timer, 'Duration:',
+                        '${stats['durationMin']} min'),
+                    Divider(color: theme.colorScheme.primary.withOpacity(0.2)),
                     _buildStatRow(Icons.fitness_center, 'Total Volume:',
-                        '${stats['volume'].toStringAsFixed(0)} kg'),
-                    Divider(
-                        color: theme.colorScheme.primary
-                            .withOpacity(0.2)), // Culoare custom divider
+                        '${stats['volume']} kg'),
+                    Divider(color: theme.colorScheme.primary.withOpacity(0.2)),
                     _buildStatRow(Icons.format_list_numbered, 'Completed Sets:',
                         '${stats['setsCount']}'),
-                    Divider(
-                        color: theme.colorScheme.primary
-                            .withOpacity(0.2)), // Culoare custom divider
+                    Divider(color: theme.colorScheme.primary.withOpacity(0.2)),
                     _buildStatRow(Icons.format_list_bulleted, 'Exercises:',
                         '${stats['exercisesCount']}'),
                   ],
@@ -200,13 +223,10 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
           ],
         ),
         actions: [
-          // Row rezolvă problema așezării butoanelor pe același rând
           Row(
             children: [
               TextButton(
                 style: TextButton.styleFrom(
-                  tapTargetSize: MaterialTapTargetSize
-                      .shrinkWrap, // Elimină padding-ul invizibil din jur
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 ),
@@ -293,174 +313,66 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
     Navigator.pop(context);
   }
 
-  void _addNewExerciseDynamically() {
-    final allExercises =
-        exercisesBox.values.map((e) => Exercise.fromMap(e as Map)).toList();
+  Future<void> _navigateToSelectExercise() async {
+    final List<int> existingIds =
+        _activeExercises.map((e) => e.exerciseId).toList();
 
-    String modalSearchQuery = '';
-    MuscleGroup? modalSelectedMuscle;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    // 💡 Pasul 2: Navigăm către pagina ta existentă (presupunem că se numește AddExercisePage)
+    // și îi trimitem lista de ID-uri de exclus
+    final selectedExercise = await Navigator.push<Exercise>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ExerciseSelectionPage(
+          existingExercisesIds: existingIds, // Transmitem lista mai departe
+        ),
       ),
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (BuildContext context, StateSetter setModalState) {
-            final filteredExercises = allExercises.where((ex) {
-              final matchesSearch = ex.name
-                  .toLowerCase()
-                  .contains(modalSearchQuery.toLowerCase());
-              final matchesMuscle = modalSelectedMuscle == null ||
-                  ex.primaryMuscles.any((muscleTarget) =>
-                      muscleTarget.group == modalSelectedMuscle);
-              return matchesSearch && matchesMuscle;
-            }).toList();
+    );
 
-            return Container(
-              padding: EdgeInsets.only(
-                top: 12,
-                left: 16,
-                right: 16,
-                bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-              ),
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(context).size.height * 0.8,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Column(
-                    children: [
-                      Container(
-                        width: 40,
-                        height: 4,
-                        margin: const EdgeInsets.only(bottom: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.withOpacity(0.4),
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text('Add Alternative Exercise',
-                              style: TextStyle(
-                                  fontSize: 18, fontWeight: FontWeight.bold)),
-                          IconButton(
-                            icon: const Icon(Icons.close),
-                            onPressed: () => Navigator.pop(context),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    decoration: InputDecoration(
-                      hintText: 'Search exercise...',
-                      prefixIcon: const Icon(Icons.search),
-                      border: const OutlineInputBorder(),
-                      contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                      suffixIcon: modalSearchQuery.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear),
-                              onPressed: () =>
-                                  setModalState(() => modalSearchQuery = ''),
-                            )
-                          : null,
-                    ),
-                    onChanged: (value) =>
-                        setModalState(() => modalSearchQuery = value),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    height: 38,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      children: MuscleGroup.values.map((muscle) {
-                        final isSelected = modalSelectedMuscle == muscle;
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 6.0),
-                          child: FilterChip(
-                            label: Text(muscle.name.toUpperCase(),
-                                style: const TextStyle(fontSize: 11)),
-                            selected: isSelected,
-                            selectedColor: Colors.blueAccent.withOpacity(0.2),
-                            checkmarkColor: Colors.blueAccent,
-                            onSelected: (bool selected) {
-                              setModalState(() {
-                                modalSelectedMuscle = selected ? muscle : null;
-                              });
-                            },
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Divider(),
-                  Expanded(
-                    child: filteredExercises.isEmpty
-                        ? const Center(
-                            child: Text('No exercises found.',
-                                style: TextStyle(color: Colors.grey)))
-                        : ListView.builder(
-                            itemCount: filteredExercises.length,
-                            itemBuilder: (context, index) {
-                              final exercise = filteredExercises[index];
-                              final primaryMuscle = exercise
-                                      .primaryMuscles.isNotEmpty
-                                  ? exercise.primaryMuscles.first.group
-                                      .name // sau .label dacă vrei numele specific
-                                  : 'core';
-                              final infoText =
-                                  '${primaryMuscle.toUpperCase()} • ${exercise.equipment.name.toUpperCase()}';
-
-                              return ListTile(
-                                contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 4, vertical: 2),
-                                title: Text(exercise.name,
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.w500)),
-                                subtitle: Text(infoText,
-                                    style: const TextStyle(
-                                        fontSize: 11, color: Colors.blueGrey)),
-                                trailing: const Icon(Icons.add_circle_outline,
-                                    color: Colors.blueAccent),
-                                onTap: () {
-                                  setState(() {
-                                    // Utilizăm noul constructor tipizat
-                                    _activeExercises.add(
-                                      LoggedExercise(
-                                        name: exercise.name,
-                                        sets: [
-                                          const LoggedSet(weight: 0.0, reps: 0)
-                                        ],
-                                      ),
-                                    );
-                                  });
-                                  _updateLiveProgress();
-                                  Navigator.pop(context);
-                                },
-                              );
-                            },
-                          ),
-                  ),
-                ],
-              ),
-            );
-          },
+    // 💡 Pasul 3: Dacă utilizatorul a selectat un exercițiu, îl adăugăm în listă
+    if (selectedExercise != null && mounted) {
+      setState(() {
+        _activeExercises.add(
+          LoggedExercise(
+            exerciseId: selectedExercise.id,
+            sets: [const LoggedSet(weight: 0.0, reps: 0)],
+          ),
         );
-      },
+      });
+      _updateLiveProgress();
+    }
+  }
+
+  Widget _buildLiveStatColumn(String label, String value, ThemeData theme) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: theme.colorScheme.primary,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final stats = _calculateCurrentStats();
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
@@ -496,246 +408,440 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: TextField(
-            controller: _titleController,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            decoration: const InputDecoration(
-              hintText: 'Workout Title...',
-              border: InputBorder.none,
-              suffixIcon: Icon(Icons.edit, size: 16, color: Colors.grey),
-            ),
-            onChanged: (value) => _updateLiveProgress(),
+          title: const Text(
+            'You`re Goated',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
-          leading: IconButton(
-            icon: const Icon(Icons.close, color: Colors.redAccent),
+          leadingWidth: 80,
+          leading: TextButton(
             onPressed: () => Navigator.maybePop(context),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(
+                  color: Colors.redAccent, fontWeight: FontWeight.w600),
+            ),
           ),
           actions: [
-            IconButton(
-              icon: const Icon(Icons.check, color: Colors.green, size: 30),
-              onPressed: _showFinishConfirmationDialog,
-            )
+            Padding(
+              padding: const EdgeInsets.only(right: 12.0),
+              child: SizedBox(
+                width: 100,
+                height: 50,
+                child: AppFilledButton(
+                  label: 'Save',
+                  onPressed: _showFinishConfirmationDialog,
+                ),
+              ),
+            ),
           ],
         ),
         body: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () => FocusScope.of(context).unfocus(),
-          child: ReorderableListView.builder(
-            itemCount: _activeExercises.length,
-            onReorderItem: (oldIndex, newIndex) {
-              setState(() {
-                final item = _activeExercises.removeAt(oldIndex);
-                _activeExercises.insert(newIndex, item);
-              });
-              _updateLiveProgress();
-            },
-            itemBuilder: (context, exIndex) {
-              final exercise = _activeExercises[exIndex];
-              final sets = exercise.sets;
-
-              return Card(
-                key: ValueKey('active_ex_${exercise.name}_$exIndex'),
-                margin: const EdgeInsets.all(12),
-                child: Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Icon(Icons.drag_handle,
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(exercise.name,
-                                style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurface)),
-                          ),
-                          IconButton(
-                            icon: Icon(Icons.info_outline,
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant),
-                            onPressed: () {
-                              final rawData = exercisesBox.get(exercise.name);
-                              if (rawData != null) {
-                                final fullExercise =
-                                    Exercise.fromMap(rawData as Map);
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => ExerciseDetailPage(
-                                        exercise: fullExercise),
-                                  ),
-                                );
-                              } else {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                      content: Text(
-                                          'Exercise details not found ⚠️')),
-                                );
-                              }
-                            },
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.delete,
-                                color: Colors.redAccent),
-                            onPressed: () {
-                              setState(() {
-                                _activeExercises.removeAt(exIndex);
-                              });
-                              _updateLiveProgress();
-                            },
-                          )
-                        ],
-                      ),
-                      Divider(
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextField(
+                    controller: _titleController,
+                    textAlign: TextAlign.left,
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.bold),
+                    decoration: InputDecoration(
+                      hintText: 'Titlu antrenament...',
+                      border: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
+                      suffixIcon: Icon(Icons.edit,
+                          size: 16,
+                          color:
+                              Theme.of(context).colorScheme.onSurfaceVariant),
+                    ),
+                    onChanged: (value) => _updateLiveProgress(),
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    vertical: 12.0, horizontal: 16.0),
+                decoration: BoxDecoration(
+                  color: theme.cardColor.withOpacity(0.4),
+                  border: Border(
+                      bottom: BorderSide(
                           color: Theme.of(context)
                               .colorScheme
                               .primary
-                              .withOpacity(0.2)),
-                      Padding(
-                        padding: EdgeInsets.symmetric(vertical: 4.0),
-                        child: Row(
+                              .withOpacity(0.2))),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildLiveStatColumn(
+                        'Duration', stats['durationStr'], theme),
+                    _buildLiveStatColumn('Volume',
+                        '${stats['volume'].toStringAsFixed(0)} kg', theme),
+                    _buildLiveStatColumn(
+                        'Sets', '${stats['setsCount']}', theme),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: ReorderableListView.builder(
+                  itemCount: _activeExercises.length,
+                  // 🔧 FIX: parametrul corect este `onReorder`, nu `onReorderItem`,
+                  // si trebuie ajustat newIndex cand se muta in jos in lista.
+                  onReorder: (oldIndex, newIndex) {
+                    setState(() {
+                      if (newIndex > oldIndex) newIndex -= 1;
+                      final item = _activeExercises.removeAt(oldIndex);
+                      _activeExercises.insert(newIndex, item);
+                    });
+                    _updateLiveProgress();
+                  },
+                  itemBuilder: (context, exIndex) {
+                    final exercise = _activeExercises[exIndex];
+                    final sets = exercise.sets;
+
+                    // 🔧 Reconstruim exercitiul original din cache, dupa id.
+                    final fullExercise = _resolveExercise(exercise.exerciseId);
+                    final coverImage = fullExercise?.coverImage;
+
+                    final isMissingData = fullExercise == null;
+                    final isImageEmpty =
+                        coverImage == null || coverImage.isEmpty;
+
+                    // 🔧 Nume afisat: fallback clar daca exercitiul nu mai exista
+                    // in exercisesBox (a fost sters/redenumit intre timp).
+                    final displayName = fullExercise?.name ??
+                        'Exercițiu necunoscut (ID: ${exercise.exerciseId})';
+
+                    return Card(
+                      key:
+                          ValueKey('active_ex_${exercise.exerciseId}_$exIndex'),
+                      margin: const EdgeInsets.all(12),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            SizedBox(
-                                width: 50,
-                                child: Text('Set',
-                                    style: TextStyle(
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurfaceVariant))),
-                            Expanded(
-                                child: Text('Weight (kg)',
-                                    style: TextStyle(
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurfaceVariant),
-                                    textAlign: TextAlign.center)),
-                            Expanded(
-                                child: Text('Reps',
-                                    style: TextStyle(
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurfaceVariant),
-                                    textAlign: TextAlign.center)),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Icon(Icons.drag_handle,
+                                    color: theme.colorScheme.onSurfaceVariant),
+                                const SizedBox(width: 8),
+                                if (!isMissingData && !isImageEmpty) ...[
+                                  CircleAvatar(
+                                    radius: 20,
+                                    backgroundColor: theme
+                                        .colorScheme.surfaceContainerHighest,
+                                    backgroundImage:
+                                        AssetImage('assets/$coverImage'),
+                                  ),
+                                  const SizedBox(width: 12),
+                                ],
+                                // 💡 Titlul este acum înfășurat în InkWell pentru a fi un buton de navigare către detalii
+                                Expanded(
+                                  child: InkWell(
+                                    onTap: () {
+                                      if (fullExercise != null) {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) =>
+                                                ExerciseDetailPage(
+                                                    exercise: fullExercise),
+                                          ),
+                                        );
+                                      } else {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                                'Eroare: Lipsesc detaliile pentru ID "${exercise.exerciseId}"! ⚠️'),
+                                            backgroundColor: Colors.redAccent,
+                                          ),
+                                        );
+                                      }
+                                    },
+                                    borderRadius: BorderRadius.circular(4),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 4.0),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            displayName,
+                                            style: TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.bold,
+                                                color: theme
+                                                    .colorScheme.onSurface),
+                                          ),
+                                          if (isMissingData || isImageEmpty)
+                                            Text(
+                                              isMissingData
+                                                  ? '[⚠️ Nu există în exercisesBox]'
+                                                  : '[⚠️ Imaginea este goală în DB]',
+                                              style: const TextStyle(
+                                                  fontSize: 11,
+                                                  color: Colors.redAccent,
+                                                  fontWeight: FontWeight.bold),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                // 💡 Înlocuit butoanele vechi cu un PopupMenuButton (cele 3 puncte verticale/orizontale)
+                                // 💡 Înlocuiește vechiul PopupMenuButton<String>(...) cu acest IconButton elegant:
+                                IconButton(
+                                  icon: Icon(Icons.more_vert,
+                                      color:
+                                          theme.colorScheme.onSurfaceVariant),
+                                  onPressed: () {
+                                    // Apelăm componenta noastră reutilizabilă
+                                    AppActionsSheet.show(
+                                      context: context,
+                                      title: displayName,
+                                      subtitle:
+                                          'Manage active exercise session',
+                                      actions: [
+                                        // 1. Opțiunea de vizualizare
+                                        SheetActionItem(
+                                          icon: Icons.info_outline,
+                                          label: 'View Exercise Details',
+                                          onPressed: () {
+                                            if (fullExercise != null) {
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (context) =>
+                                                      ExerciseDetailPage(
+                                                          exercise:
+                                                              fullExercise),
+                                                ),
+                                              );
+                                            }
+                                          },
+                                        ),
+                                        // 2. Opțiunea de ștergere CU MODALĂ DE CONFIRMARE
+                                        SheetActionItem(
+                                          icon: Icons.delete_outline,
+                                          label: 'Remove Exercise',
+                                          color: Colors.redAccent,
+                                          onPressed: () async {
+                                            // Deschidem dialogul de siguranță ca să nu mai pierdem date în puii mei
+                                            final bool? confirmDelete =
+                                                await showDialog<bool>(
+                                              context: context,
+                                              builder: (BuildContext context) =>
+                                                  AlertDialog(
+                                                title: const Text(
+                                                    'Remove Exercise? ⚠️'),
+                                                content: Text(
+                                                    'Are you sure you want to remove "$displayName" and all its completed sets from this workout?'),
+                                                actions: [
+                                                  TextButton(
+                                                    onPressed: () =>
+                                                        Navigator.pop(
+                                                            context, false),
+                                                    child: const Text('Cancel',
+                                                        style: TextStyle(
+                                                            color:
+                                                                Colors.grey)),
+                                                  ),
+                                                  ElevatedButton(
+                                                    style: ElevatedButton
+                                                        .styleFrom(
+                                                            backgroundColor:
+                                                                Colors
+                                                                    .redAccent),
+                                                    onPressed: () =>
+                                                        Navigator.pop(
+                                                            context, true),
+                                                    child: const Text('Remove',
+                                                        style: TextStyle(
+                                                            color:
+                                                                Colors.white)),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+
+                                            // Dacă utilizatorul a confirmat, abia atunci îl scoatem din listă
+                                            if (confirmDelete == true) {
+                                              setState(() {
+                                                _activeExercises
+                                                    .removeAt(exIndex);
+                                              });
+                                              _updateLiveProgress();
+                                            }
+                                          },
+                                        ),
+                                      ],
+                                    );
+                                  },
+                                ),
+                              ],
+                            ),
+                            Divider(
+                                color:
+                                    theme.colorScheme.primary.withOpacity(0.2)),
+                            Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 4.0),
+                              child: Row(
+                                children: [
+                                  // 💡 Corectat aici: FontWeight.w600 în loc de FontWeight(600)
+                                  SizedBox(
+                                      width: 50,
+                                      child: Text('Set',
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              color: theme.colorScheme
+                                                  .onSurfaceVariant))),
+                                  Expanded(
+                                      child: Text('Weight (kg)',
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              color: theme.colorScheme
+                                                  .onSurfaceVariant),
+                                          textAlign: TextAlign.center)),
+                                  Expanded(
+                                      child: Text('Reps',
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              color: theme.colorScheme
+                                                  .onSurfaceVariant),
+                                          textAlign: TextAlign.center)),
+                                ],
+                              ),
+                            ),
+                            ...sets.asMap().entries.map((entry) {
+                              int setIndex = entry.key;
+                              final set = entry.value;
+
+                              return Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 4.0),
+                                child: Row(
+                                  children: [
+                                    SizedBox(
+                                        width: 50,
+                                        child: Text('${setIndex + 1}',
+                                            style: const TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.bold))),
+                                    Expanded(
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 8.0),
+                                        child: TextFormField(
+                                          initialValue: set.weight == 0.0
+                                              ? ''
+                                              : set.weight.toString(),
+                                          keyboardType: const TextInputType
+                                              .numberWithOptions(decimal: true),
+                                          decoration: const InputDecoration(
+                                              border: OutlineInputBorder(),
+                                              contentPadding:
+                                                  EdgeInsets.symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 4),
+                                              hintText: '0'),
+                                          onChanged: (value) {
+                                            final newWeight =
+                                                double.tryParse(value) ?? 0.0;
+                                            exercise.sets[setIndex] = LoggedSet(
+                                                weight: newWeight,
+                                                reps: set.reps);
+                                            _updateLiveProgress();
+                                          },
+                                        ),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 8.0),
+                                        child: TextFormField(
+                                          initialValue: set.reps == 0
+                                              ? ''
+                                              : set.reps.toString(),
+                                          keyboardType: TextInputType.number,
+                                          decoration: const InputDecoration(
+                                              border: OutlineInputBorder(),
+                                              contentPadding:
+                                                  EdgeInsets.symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 4),
+                                              hintText: '0'),
+                                          onChanged: (value) {
+                                            final newReps =
+                                                int.tryParse(value) ?? 0;
+                                            exercise.sets[setIndex] = LoggedSet(
+                                                weight: set.weight,
+                                                reps: newReps);
+                                            _updateLiveProgress();
+                                          },
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }),
+                            const SizedBox(height: 10),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: AppGhostButton(
+                                    label: 'Add Set',
+                                    icon: Icons.add,
+                                    onPressed: () {
+                                      setState(() {
+                                        double lastWeight = sets.isNotEmpty
+                                            ? sets.last.weight
+                                            : 0.0;
+                                        int lastReps = sets.isNotEmpty
+                                            ? sets.last.reps
+                                            : 0;
+                                        sets.add(LoggedSet(
+                                            weight: lastWeight,
+                                            reps: lastReps));
+                                      });
+                                      _updateLiveProgress();
+                                    },
+                                  ),
+                                ),
+                                if (sets.length > 1)
+                                  TextButton(
+                                    onPressed: () {
+                                      setState(() {
+                                        sets.removeLast();
+                                      });
+                                      _updateLiveProgress();
+                                    },
+                                    child: const Text('Remove Last Set',
+                                        style:
+                                            TextStyle(color: Colors.redAccent)),
+                                  )
+                              ],
+                            )
                           ],
                         ),
                       ),
-                      ...sets.asMap().entries.map((entry) {
-                        int setIndex = entry.key;
-                        final set = entry.value;
-
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4.0),
-                          child: Row(
-                            children: [
-                              SizedBox(
-                                  width: 50,
-                                  child: Text('${setIndex + 1}',
-                                      style: const TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold))),
-                              Expanded(
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8.0),
-                                  child: TextFormField(
-                                    initialValue: set.weight == 0.0
-                                        ? ''
-                                        : set.weight.toString(),
-                                    keyboardType:
-                                        const TextInputType.numberWithOptions(
-                                            decimal: true),
-                                    decoration: const InputDecoration(
-                                        border: OutlineInputBorder(),
-                                        contentPadding: EdgeInsets.symmetric(
-                                            horizontal: 8, vertical: 4),
-                                        hintText: '0'),
-                                    onChanged: (value) {
-                                      // Pentru că LoggedSet are proprietăți finale, înlocuim setul în listă
-                                      final newWeight =
-                                          double.tryParse(value) ?? 0.0;
-                                      exercise.sets[setIndex] = LoggedSet(
-                                          weight: newWeight, reps: set.reps);
-                                      _updateLiveProgress();
-                                    },
-                                  ),
-                                ),
-                              ),
-                              Expanded(
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8.0),
-                                  child: TextFormField(
-                                    initialValue: set.reps == 0
-                                        ? ''
-                                        : set.reps.toString(),
-                                    keyboardType: TextInputType.number,
-                                    decoration: const InputDecoration(
-                                        border: OutlineInputBorder(),
-                                        contentPadding: EdgeInsets.symmetric(
-                                            horizontal: 8, vertical: 4),
-                                        hintText: '0'),
-                                    onChanged: (value) {
-                                      final newReps = int.tryParse(value) ?? 0;
-                                      exercise.sets[setIndex] = LoggedSet(
-                                          weight: set.weight, reps: newReps);
-                                      _updateLiveProgress();
-                                    },
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }),
-                      const SizedBox(height: 10),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: AppGhostButton(
-                              label: 'Add Set',
-                              icon: Icons.add,
-                              onPressed: () {
-                                setState(() {
-                                  double lastWeight =
-                                      sets.isNotEmpty ? sets.last.weight : 0.0;
-                                  int lastReps =
-                                      sets.isNotEmpty ? sets.last.reps : 0;
-                                  sets.add(LoggedSet(
-                                      weight: lastWeight, reps: lastReps));
-                                });
-                                _updateLiveProgress();
-                              },
-                            ),
-                          ),
-                          if (sets.length > 1)
-                            TextButton(
-                              onPressed: () {
-                                setState(() {
-                                  sets.removeLast();
-                                });
-                                _updateLiveProgress();
-                              },
-                              child: const Text('Remove Last Set',
-                                  style: TextStyle(color: Colors.redAccent)),
-                            )
-                        ],
-                      )
-                    ],
-                  ),
+                    );
+                  },
                 ),
-              );
-            },
+              ),
+            ],
           ),
         ),
         bottomNavigationBar: SafeArea(
@@ -743,7 +849,7 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
             padding: const EdgeInsets.all(8.0),
             child: AppOutlinedButton(
               label: "Add Alternative Exercise",
-              onPressed: _addNewExerciseDynamically,
+              onPressed: _navigateToSelectExercise,
               icon: Icons.fitness_center,
             ),
           ),

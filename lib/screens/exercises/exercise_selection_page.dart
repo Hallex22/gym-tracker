@@ -5,11 +5,12 @@ import '../../models/models.dart';
 import '../../widgets/app_buttons.dart';
 
 class ExerciseSelectionPage extends StatefulWidget {
-  final List<Exercise>? existingExercises;
+  // 💡 Modificat: Primim acum o listă lightweight de ID-uri (int)
+  final List<int>? existingExercisesIds;
 
   const ExerciseSelectionPage({
     super.key,
-    this.existingExercises,
+    this.existingExercisesIds,
   });
 
   @override
@@ -21,7 +22,7 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
   List<Exercise> _allAvailableExercises = [];
   String _searchQuery = '';
 
-  // Noile stări pentru filtre complexe
+  // Stări pentru filtre complexe
   MuscleGroup? _selectedMuscleFilter;
   Equipment? _selectedEquipmentFilter;
 
@@ -36,12 +37,13 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
         exercisesBox.values.map((e) => Exercise.fromMap(e as Map)).toList();
 
     setState(() {
-      if (widget.existingExercises != null &&
-          widget.existingExercises!.isNotEmpty) {
-        final existingNames =
-            widget.existingExercises!.map((e) => e.name).toSet();
+      // 💡 REPARAT: Folosim corect lista de ID-uri primită prin constructor pentru excludere
+      if (widget.existingExercisesIds != null &&
+          widget.existingExercisesIds!.isNotEmpty) {
+        final excludedIds = widget.existingExercisesIds!.toSet();
+        // Păstrăm doar exercițiile care NU se află în lista de excluse
         _allAvailableExercises =
-            exercises.where((ex) => !existingNames.contains(ex.name)).toList();
+            exercises.where((ex) => !excludedIds.contains(ex.id)).toList();
       } else {
         _allAvailableExercises = exercises;
       }
@@ -50,8 +52,9 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
 
   void _toggleExerciseSelection(Exercise exercise) {
     setState(() {
+      // 💡 OPTIMIZARE: Verificarea selecției se face acum după ID (int), nu după string name
       final index =
-          _newSelectedExercises.indexWhere((e) => e.name == exercise.name);
+          _newSelectedExercises.indexWhere((e) => e.id == exercise.id);
       if (index >= 0) {
         _newSelectedExercises.removeAt(index);
       } else {
@@ -61,7 +64,8 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
   }
 
   bool _isExerciseSelected(Exercise exercise) {
-    return _newSelectedExercises.any((e) => e.name == exercise.name);
+    // 💡 OPTIMIZARE: Căutare ultra-rapidă după ID numeric
+    return _newSelectedExercises.any((e) => e.id == exercise.id);
   }
 
   List<Exercise> get _filteredExercises {
@@ -175,12 +179,13 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
         _selectedEquipmentFilter != null ||
         _searchQuery.isNotEmpty;
 
+    final theme = Theme.of(context);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Select Exercises'),
         centerTitle: true,
       ),
-      // REPARAȚIA: Îmbrăcat direct aici în GestureDetector pentru a prinde click-urile pe tot ecranul
       body: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () {
@@ -210,8 +215,6 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
                     onChanged: (value) => setState(() => _searchQuery = value),
                   ),
                   const SizedBox(height: 12),
-
-                  // Rândul cu Butoanele de Filtre + X-ul de Clear All
                   Row(
                     children: [
                       // Buton Filtru Mușchi
@@ -220,14 +223,12 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(horizontal: 8),
                             foregroundColor: _selectedMuscleFilter != null
-                                ? Theme.of(context).colorScheme.primary
-                                : Theme.of(context).colorScheme.onSurface,
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.onSurface,
                             side: BorderSide(
                                 color: _selectedMuscleFilter != null
-                                    ? Theme.of(context).colorScheme.primary
-                                    : Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant
+                                    ? theme.colorScheme.primary
+                                    : theme.colorScheme.onSurfaceVariant
                                         .withOpacity(0.3)),
                           ),
                           onPressed: () => _showFilterSelector<MuscleGroup>(
@@ -258,14 +259,12 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(horizontal: 8),
                             foregroundColor: _selectedEquipmentFilter != null
-                                ? Theme.of(context).colorScheme.primary
-                                : Theme.of(context).colorScheme.onSurface,
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.onSurface,
                             side: BorderSide(
                                 color: _selectedEquipmentFilter != null
-                                    ? Theme.of(context).colorScheme.primary
-                                    : Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant
+                                    ? theme.colorScheme.primary
+                                    : theme.colorScheme.onSurfaceVariant
                                         .withOpacity(0.3)),
                           ),
                           onPressed: () => _showFilterSelector<Equipment>(
@@ -289,14 +288,11 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
                         ),
                       ),
 
-                      // Butonul inteligent "X" de Resetare Globală
                       if (hasActiveFilters) ...[
                         const SizedBox(width: 4),
                         IconButton(
                           icon: Icon(Icons.refresh,
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant),
+                              color: theme.colorScheme.onSurfaceVariant),
                           tooltip: 'Clear Filters',
                           onPressed: _clearAllFilters,
                         ),
@@ -310,7 +306,7 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
                 height: 1,
                 indent: 16,
                 endIndent: 16,
-                color: Theme.of(context).colorScheme.primary.withOpacity(0.2)),
+                color: theme.colorScheme.primary.withOpacity(0.2)),
 
             // --- LISTA DE EXERCIȚII REZULTATE ---
             Expanded(
@@ -319,8 +315,7 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
                       child: Text(
                         'No exercises found matching filters.',
                         style: TextStyle(
-                            color:
-                                Theme.of(context).colorScheme.onSurfaceVariant),
+                            color: theme.colorScheme.onSurfaceVariant),
                       ),
                     )
                   : ListView.builder(
@@ -345,20 +340,18 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
                               exercise.name,
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
-                                color: Theme.of(context).colorScheme.onSurface,
+                                color: theme.colorScheme.onSurface,
                               ),
                             ),
                             subtitle: Text(
                               subtitleText,
                               style: TextStyle(
                                   fontSize: 11,
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant),
+                                  color: theme.colorScheme.onSurfaceVariant),
                             ),
                             value: isSelected,
-                            activeColor: Theme.of(context).colorScheme.primary,
-                            checkColor: Theme.of(context).colorScheme.onPrimary,
+                            activeColor: theme.colorScheme.primary,
+                            checkColor: theme.colorScheme.onPrimary,
                             onChanged: (bool? value) =>
                                 _toggleExerciseSelection(exercise),
                             controlAffinity: ListTileControlAffinity.trailing,

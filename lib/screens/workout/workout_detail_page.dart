@@ -49,19 +49,8 @@ class WorkoutDetailPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Calculăm durata în minute dacă avem endTime
-    final duration = log.endTime != null
-        ? log.endTime!.difference(log.startTime).inMinutes
-        : 0;
-
     // Formatăm data frumos (ex: 24 Oct 2023, 18:30)
     final formattedDate = formatDateNative(log.startTime);
-
-    // Calculăm numărul total de seturi efective din listă
-    int totalSetsCount = 0;
-    for (var ex in log.exercises) {
-      totalSetsCount += ex.sets.length;
-    }
 
     return Scaffold(
       appBar: AppBar(
@@ -111,11 +100,12 @@ class WorkoutDetailPage extends StatelessWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    _buildStatItem(Icons.timer, '$duration min', 'Duration'),
+                    _buildStatItem(
+                        Icons.timer, log.formattedDuration, 'Duration'),
                     _buildStatItem(Icons.fitness_center,
                         '${log.totalVolume.toStringAsFixed(0)} kg', 'Volume'),
                     _buildStatItem(Icons.format_list_numbered,
-                        '$totalSetsCount', 'Total Sets'),
+                        '${log.totalSetsCount}', 'Total Sets'),
                   ],
                 ),
               ),
@@ -144,6 +134,14 @@ class WorkoutDetailPage extends StatelessWidget {
                 itemCount: log.exercises.length,
                 itemBuilder: (context, exIndex) {
                   final exercise = log.exercises[exIndex];
+                  final rawExerciseData = exercisesBox.get(exercise.exerciseId);
+
+                  String exerciseName = 'Unknown Exercise';
+                  if (rawExerciseData != null) {
+                    exerciseName = rawExerciseData is Map
+                        ? (rawExerciseData['name'] ?? 'Unknown Exercise')
+                        : (rawExerciseData.name ?? 'Unknown Exercise');
+                  }
 
                   return Card(
                     margin: const EdgeInsets.only(bottom: 14),
@@ -152,9 +150,9 @@ class WorkoutDetailPage extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Nume Exercițiu
+                          // Numele Real al Exercițiului recuperat din DB
                           Text(
-                            exercise.name,
+                            exerciseName,
                             style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
@@ -200,7 +198,7 @@ class WorkoutDetailPage extends StatelessWidget {
                                         fontWeight: FontWeight.w500),
                                   ),
                                   const Spacer(),
-                                  // Calcul Volum parțial per set (opțional, dă un aer premium)
+                                  // Calcul Volum parțial per set
                                   Text(
                                     '${(set.weight * set.reps).toStringAsFixed(0)} kg',
                                     style: TextStyle(

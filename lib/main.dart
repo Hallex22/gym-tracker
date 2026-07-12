@@ -52,23 +52,6 @@ Future<void> _seedDatabaseFromJsonIfNeeded() async {
         }
       }
 
-      // 3. Generăm o rutină "Full Body Starter" ca demo
-      if (exercisesBox.isNotEmpty && routinesBox.isEmpty) {
-        // Luăm primele 3 exerciții din baza proaspăt populată
-        final initialExercises = exercisesBox.values
-            .take(3)
-            .map((e) => Exercise.fromMap(e as Map))
-            .toList();
-
-        final sampleRoutine = Routine(
-          title: 'Full Body Starter 🏋️‍♂️',
-          description: 'A sample routine generated as a starter',
-          exercises: initialExercises,
-        );
-
-        await routinesBox.add(sampleRoutine.toMap());
-      }
-
       debugPrint(
           '✅ Hive database successfully seeded using the smart Exercise.fromJson factory!');
     } catch (e) {

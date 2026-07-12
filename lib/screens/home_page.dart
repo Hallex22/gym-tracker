@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:gym_tracker/enums/workout_status.dart';
@@ -15,14 +16,42 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   List<MapEntry<dynamic, Routine>> _routineEntries = [];
   WorkoutLog? _activeWorkout;
+  Timer? _workoutTimer;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(
+        this); // 🦾 Ascultăm starea aplicației (background/foreground)
     _loadData();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this); // 🗑️ Scoatem observatorul
+    _workoutTimer?.cancel(); // 🔥 Oprim timerul complet la ieșirea de pe ecran
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // 🧠 Când utilizatorul redeschide aplicația din fundal, recalculăm timpul instant
+    if (state == AppLifecycleState.resumed) {
+      _loadData();
+    }
+  }
+
+  void _startTimer() {
+    _workoutTimer?.cancel();
+    if (_activeWorkout != null &&
+        _activeWorkout!.status == WorkoutStatus.started) {
+      _workoutTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (mounted) setState(() {});
+      });
+    }
   }
 
   void _loadData() {
@@ -43,6 +72,8 @@ class _HomePageState extends State<HomePage> {
       _routineEntries = entries;
       _activeWorkout = active;
     });
+
+    _startTimer();
   }
 
   void _tryStartWorkout(Routine routine) {
@@ -110,6 +141,71 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // --- DIALOG MODAL DEDICAT ȘTERGERII ANTRENAMENTULUI ACTIV ---
+  void _showDiscardWorkoutDialog(dynamic logKey) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Active Workout ⏳'),
+        content: const Text(
+            'What would you like to do with the current workout session?'),
+        actions: [
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextButton.icon(
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.redAccent,
+                  alignment: Alignment.centerLeft,
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                ),
+                icon: const Icon(Icons.delete_forever_outlined),
+                label: const Text('Discard Workout Session'),
+                onPressed: () async {
+                  await logsBox.delete(logKey);
+                  if (!context.mounted) return;
+                  Navigator.pop(context);
+                  _loadData();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Workout session discarded.')),
+                  );
+                },
+              ),
+              const SizedBox(height: 8),
+              TextButton.icon(
+                style: TextButton.styleFrom(
+                  foregroundColor: Theme.of(context).colorScheme.primary,
+                  alignment: Alignment.centerLeft,
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                ),
+                icon: const Icon(Icons.arrow_back),
+                label: const Text('Keep Running in Background'),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _getWorkoutDurationString(DateTime startTime) {
+    final difference = DateTime.now().difference(startTime);
+    final hours = difference.inHours;
+    final minutes =
+        difference.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds =
+        difference.inSeconds.remainder(60).toString().padLeft(2, '0');
+
+    if (hours > 0) {
+      return '${hours.toString().padLeft(2, '0')}:$minutes:$seconds';
+    }
+    return '$minutes:$seconds';
+  }
+
   // --- DRAWER PENTRU IMPORT ROUTINE ---
   void _showImportRoutineSheet() {
     final TextEditingController codeController = TextEditingController();
@@ -117,14 +213,11 @@ class _HomePageState extends State<HomePage> {
 
     showModalBottomSheet(
       context: context,
-      isScrollControlled:
-          true, // Permite sheet-ului să se ridice deasupra tastaturii
+      isScrollControlled: true,
       builder: (context) {
         return Padding(
           padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context)
-                .viewInsets
-                .bottom, // Padding dinamic pentru tastatură
+            bottom: MediaQuery.of(context).viewInsets.bottom,
           ),
           child: SafeArea(
             child: Padding(
@@ -263,8 +356,6 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
                 const Divider(),
-
-                // 1. View Routine
                 ListTile(
                   leading: Icon(Icons.visibility_outlined,
                       color: Theme.of(context).colorScheme.primary),
@@ -281,8 +372,6 @@ class _HomePageState extends State<HomePage> {
                     _loadData();
                   },
                 ),
-
-                // 2. Edit Routine
                 ListTile(
                   leading: const Icon(Icons.edit_outlined,
                       color: Colors.orangeAccent),
@@ -299,8 +388,6 @@ class _HomePageState extends State<HomePage> {
                     _loadData();
                   },
                 ),
-
-                // 3. Share Routine
                 ListTile(
                   leading: Icon(Icons.share_outlined,
                       color: Theme.of(context).colorScheme.primary),
@@ -316,8 +403,6 @@ class _HomePageState extends State<HomePage> {
                   },
                 ),
                 const Divider(),
-
-                // 4. Delete Routine
                 ListTile(
                   leading:
                       const Icon(Icons.delete_outline, color: Colors.redAccent),
@@ -339,7 +424,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // --- DIALOGUL DE CONFIRMARE PENTRU ȘTERGERE ---
   void _showDeleteConfirmationDialog(
       BuildContext context, dynamic routineKey, String title) {
     showDialog(
@@ -351,11 +435,9 @@ class _HomePageState extends State<HomePage> {
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context),
-              child: Text(
-                'Cancel',
-                style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant),
-              )),
+              child: Text('Cancel',
+                  style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant))),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
             onPressed: () async {
@@ -363,10 +445,8 @@ class _HomePageState extends State<HomePage> {
               if (!context.mounted) return;
               Navigator.pop(context);
               _loadData();
-
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('"$title" deleted.')),
-              );
+              ScaffoldMessenger.of(context)
+                  .showSnackBar(SnackBar(content: Text('"$title" deleted.')));
             },
             child: const Text('Delete', style: TextStyle(color: Colors.white)),
           ),
@@ -389,47 +469,101 @@ class _HomePageState extends State<HomePage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 1. ANTRENAMENTUL ÎN DESFĂȘURARE (Dacă există)
+              // 1. ANTRENAMENTUL ÎN DESFĂȘURARE (Modernizat, Slim, Compact cu Live Timer)
               if (_activeWorkout != null) ...[
                 Padding(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 16.0, vertical: 8.0),
+                      horizontal: 16.0, vertical: 6.0),
                   child: Card(
-                    color: Colors.amber.withOpacity(0.12),
+                    // color: Colors.amber.withOpacity(0.08),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .secondary
+                        .withOpacity(0.2),
                     shape: RoundedRectangleBorder(
-                      side: const BorderSide(color: Colors.amber, width: 1.2),
-                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .secondary
+                              .withOpacity(0.7),
+                          width: 1.0),
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.all(16),
-                      leading: const CircleAvatar(
-                        backgroundColor: Colors.amber,
-                        child: Icon(Icons.fitness_center, color: Colors.black),
-                      ),
-                      title: const Text('CURRENT WORKOUT',
-                          style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.amber)),
-                      subtitle: Padding(
-                        padding: const EdgeInsets.only(top: 4.0),
-                        child: Text(_activeWorkout!.routineTitle,
-                            style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white)),
-                      ),
-                      trailing: const Icon(Icons.arrow_forward_ios,
-                          color: Colors.amber, size: 16),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(10),
                       onTap: () {
                         _navigateToActiveWorkout(Routine(
                             title: _activeWorkout!.routineTitle,
                             exercises: []));
                       },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14.0, vertical: 12.0),
+                        child: Row(
+                          children: [
+                            Icon(Icons.lens,
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .secondary
+                                    .withOpacity(0.7),
+                                size: 10),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Workout (${_getWorkoutDurationString(_activeWorkout!.startTime)})',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .secondary
+                                          .withOpacity(0.7),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    _activeWorkout!.routineTitle,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurface,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: Icon(Icons.close,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurface,
+                                  size: 20),
+                              tooltip: 'Discard session',
+                              onPressed: () {
+                                final activeEntry = logsBox
+                                    .toMap()
+                                    .entries
+                                    .firstWhere((e) =>
+                                        WorkoutLog.fromMap(e.value as Map)
+                                            .status ==
+                                        WorkoutStatus.started);
+                                _showDiscardWorkoutDialog(activeEntry.key);
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 4),
               ],
 
               // 2. BUTONUL: START EMPTY WORKOUT
@@ -462,7 +596,6 @@ class _HomePageState extends State<HomePage> {
                     const SizedBox(height: 10),
                     Row(
                       children: [
-                        // Butonul New Routine redesenat compact pe rând
                         Expanded(
                           flex: 3,
                           child: OutlinedButton.icon(
@@ -494,7 +627,6 @@ class _HomePageState extends State<HomePage> {
                           ),
                         ),
                         const SizedBox(width: 10),
-                        // Noul buton de Import Routine cu logo dedicat (Folder cu Săgeată în jos / Download)
                         Expanded(
                           flex: 2,
                           child: OutlinedButton.icon(
@@ -565,13 +697,10 @@ class _HomePageState extends State<HomePage> {
                                     MainAxisAlignment.spaceBetween,
                                 children: [
                                   Expanded(
-                                    child: Text(
-                                      routine.title,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleLarge,
-                                    ),
-                                  ),
+                                      child: Text(routine.title,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleLarge)),
                                   IconButton(
                                     icon: Icon(Icons.more_horiz,
                                         color: Theme.of(context)
@@ -582,12 +711,10 @@ class _HomePageState extends State<HomePage> {
                                   ),
                                 ],
                               ),
-                              Text(
-                                exercisesPreview,
-                                style: Theme.of(context).textTheme.bodyMedium,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                              Text(exercisesPreview,
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis),
                               const SizedBox(height: 16),
                               AppGhostButton(
                                 label: 'Start Workout',
@@ -608,8 +735,7 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-// Structura pentru _TopToastWidget rămâne neschimbată...
-
+// --- PRIVATE WIDGET: TOP TOAST ---
 class _TopToastWidget extends StatefulWidget {
   final String message;
   final VoidCallback onDismiss;
@@ -628,26 +754,24 @@ class _TopToastWidgetState extends State<_TopToastWidget>
   @override
   void initState() {
     super.initState();
-    // Configurația animației (durata de intrare/ieșire)
     _controller = AnimationController(
       duration: const Duration(milliseconds: 400),
       vsync: this,
     );
 
     _offsetAnimation = Tween<Offset>(
-      begin: const Offset(0.0, -1.5), // Pornește de deasupra ecranului
-      end: Offset.zero, // Se oprește în poziția naturală
+      begin: const Offset(0.0, -1.5),
+      end: Offset.zero,
     ).animate(CurvedAnimation(
       parent: _controller,
-      curve: Curves.easeOutBack, // Efect elastic discret la coborâre
+      curve: Curves.easeOutBack,
     ));
 
-    _controller.forward(); // Pornim animația de intrare
+    _controller.forward();
 
-    // Programăm dispariția automată după 2.5 secunde
     Future.delayed(const Duration(milliseconds: 2500), () async {
       if (mounted) {
-        await _controller.reverse(); // Animație de retragere în sus
+        await _controller.reverse();
         widget.onDismiss();
       }
     });
@@ -655,7 +779,8 @@ class _TopToastWidgetState extends State<_TopToastWidget>
 
   @override
   void dispose() {
-    _controller.dispose();
+    _controller
+        .dispose(); // ✨ Curățat corect, fără apelul greșit spre _workoutTimer
     super.dispose();
   }
 
@@ -675,7 +800,6 @@ class _TopToastWidgetState extends State<_TopToastWidget>
                 padding: const EdgeInsets.symmetric(
                     horizontal: 16.0, vertical: 14.0),
                 decoration: BoxDecoration(
-                  // Nuanță modernă de verde emerald închis cu accent vibrant
                   color: const Color(0xFF0F5132),
                   borderRadius: BorderRadius.circular(12),
                   border:

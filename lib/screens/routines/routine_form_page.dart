@@ -63,7 +63,8 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
 
     if (confirm) {
       setState(() {
-        _selectedExercises.removeWhere((e) => e.name == exercise.name);
+        // 💡 OPTIMIZARE: Eliminăm din starea locală pe bază de ID numeric rapid
+        _selectedExercises.removeWhere((e) => e.id == exercise.id);
       });
     }
   }
@@ -137,18 +138,20 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     // Definirea stilului comun pentru borduri inteligente
     final inputDecorationTheme = InputDecoration(
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
         borderSide: BorderSide(
-          color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+          color: theme.colorScheme.primary.withOpacity(0.2),
         ),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
         borderSide: BorderSide(
-          color: Theme.of(context).colorScheme.primary,
+          color: theme.colorScheme.primary,
           width: 1.5,
         ),
       ),
@@ -165,12 +168,11 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
             ),
           IconButton(
             icon: Icon(Icons.save,
-                color: Theme.of(context).colorScheme.primary, size: 28),
+                color: theme.colorScheme.primary, size: 28),
             onPressed: _saveRoutine,
           )
         ],
       ),
-      // Adăugat GestureDetector pentru închiderea tastatului la apăsare în exterior
       body: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => FocusScope.of(context).unfocus(),
@@ -218,7 +220,7 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ),
@@ -239,32 +241,33 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
                         final ex = _selectedExercises[index];
                         final primaryMuscle = ex.primaryMuscles.isNotEmpty
                             ? ex.primaryMuscles.first.group
-                            : 'Core';
-                        final extraInfo =
-                            '${primaryMuscle} • ${ex.equipment.name.toUpperCase()}';
+                            : null;
+                        
+                        // 💡 Corectat textul din enum-uri să se formateze curat
+                        final muscleName = primaryMuscle != null ? primaryMuscle.name.toUpperCase() : 'CORE';
+                        final extraInfo = '$muscleName • ${ex.equipment.name.toUpperCase()}';
 
                         return Card(
-                          key: ValueKey('selected_vert_${ex.name}'),
+                          // 💡 Modificat cheia unică să fie bazată pe ID, evitând bug-uri la exerciții cu nume identice
+                          key: ValueKey('selected_vert_${ex.id}_$index'),
                           margin: const EdgeInsets.symmetric(vertical: 4),
                           elevation: 0,
                           child: ListTile(
                             dense: true,
                             leading: Icon(Icons.drag_handle,
-                                color: Theme.of(context).colorScheme.primary),
+                                color: theme.colorScheme.primary),
                             title: Text(
                               ex.name,
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
-                                color: Theme.of(context).colorScheme.onSurface,
+                                color: theme.colorScheme.onSurface,
                               ),
                             ),
                             subtitle: Text(
                               extraInfo,
                               style: TextStyle(
                                 fontSize: 11,
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurfaceVariant,
+                                color: theme.colorScheme.onSurfaceVariant,
                               ),
                             ),
                             trailing: IconButton(
@@ -285,7 +288,7 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
                       'No exercises added yet.\nTap below to start building! 🛠️',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          color: theme.colorScheme.onSurfaceVariant,
                           fontSize: 15),
                     ),
                   ),
@@ -300,12 +303,15 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
                     label: 'Add Exercises',
                     icon: Icons.add,
                     onPressed: () async {
+                      // 💡 Pasăm doar ID-urile exercițiilor selectate curent, păstrând transferul lightweight (RAM minim)
+                      final List<int> currentActiveIds = _selectedExercises.map((e) => e.id).toList();
+
                       final List<Exercise>? result =
                           await Navigator.push<List<Exercise>>(
                         context,
                         MaterialPageRoute(
                           builder: (context) => ExerciseSelectionPage(
-                            existingExercises: _selectedExercises,
+                            existingExercisesIds: currentActiveIds, // 💡 Trimitem ID-urile către noua proprietate
                           ),
                         ),
                       );

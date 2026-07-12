@@ -1,3 +1,4 @@
+// models/workout_log.dart
 import 'dart:convert';
 
 import 'package:gym_tracker/enums/workout_status.dart';
@@ -21,29 +22,68 @@ class LoggedSet {
         weight: (map['weight'] ?? 0.0).toDouble(),
         reps: (map['reps'] ?? 0).toInt(),
       );
+
+  double get setVolume {
+    double volume = 0;
+    volume += weight * reps;
+    return volume;
+  }
 }
 
+//  -------------------------------------
 // Model pentru exercitiu logat
 class LoggedExercise {
-  final String name;
+  final int exerciseId;
   final List<LoggedSet> sets;
 
   const LoggedExercise({
-    required this.name,
+    required this.exerciseId,
     required this.sets,
   });
 
   Map<String, dynamic> toMap() => {
-        'name': name,
+        'exerciseId': exerciseId,
         'sets': sets.map((s) => s.toMap()).toList(),
       };
 
   factory LoggedExercise.fromMap(Map<dynamic, dynamic> map) {
     final List<dynamic> rawSets = map['sets'] ?? [];
     return LoggedExercise(
-      name: map['name'] as String,
+      exerciseId: (map['exerciseId'] as num?)?.toInt() ?? 1,
       sets: rawSets.map((s) => LoggedSet.fromMap(s as Map)).toList(),
     );
+  }
+
+  // Metode pe LoggedExercise
+  double get exerciseVolume {
+    double volume = 0;
+    for (var set in sets) {
+      volume += set.setVolume;
+    }
+    return volume;
+  }
+
+  int get completedSetsCount {
+    int count = 0;
+    count += sets.where((s) => s.reps > 0).length;
+    return count;
+  }
+
+  double get maxWeight {
+    if (sets.isEmpty) return 0.0;
+    return sets.map((s) => s.weight).reduce((a, b) => a > b ? a : b);
+  }
+
+  double get estimated1RM {
+    if (sets.isEmpty) return 0.0;
+    double highest1RM = 0.0;
+    for (var set in sets) {
+      if (set.reps > 0) {
+        double current1RM = set.weight * (1 + set.reps / 30.0);
+        if (current1RM > highest1RM) highest1RM = current1RM;
+      }
+    }
+    return highest1RM;
   }
 }
 
@@ -98,10 +138,37 @@ class WorkoutLog {
   double get totalVolume {
     double volume = 0;
     for (var ex in exercises) {
-      for (var set in ex.sets) {
-        volume += set.reps * set.weight;
-      }
+      volume += ex.exerciseVolume;
     }
     return volume;
+  }
+
+  int get totalSetsCount {
+    int count = 0;
+    for (var ex in exercises) {
+      count += ex.sets.length;
+    }
+    return count;
+  }
+
+  int get completedSetsCount {
+    int count = 0;
+    for (var ex in exercises) {
+      count += ex.completedSetsCount;
+    }
+    return count;
+  }
+
+  String get formattedDuration {
+    if (endTime == null) return "In progress...";
+    final duration = endTime!.difference(startTime);
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes.remainder(60);
+
+    if (hours > 0) {
+      return '${hours}h ${minutes}m';
+    } else {
+      return '$minutes min';
+    }
   }
 }
