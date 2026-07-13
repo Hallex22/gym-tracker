@@ -1,6 +1,6 @@
-# gym_tracker
+# Gym Tracker
 
-A new Flutter project.
+Easiest way to track your workout progress and analyze your data.
 
 ## Getting Started
 
