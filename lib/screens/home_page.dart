@@ -5,11 +5,11 @@ import 'package:gym_tracker/enums/workout_status.dart';
 import 'package:gym_tracker/screens/routines/routine_detail_page.dart';
 import 'package:gym_tracker/screens/routines/routine_form_page.dart';
 import 'package:gym_tracker/widgets/top_toast.dart';
-import '../main.dart';
 import '../models/models.dart';
 import '../widgets/app_actions_sheet.dart';
 import 'workout/active_workout_page.dart';
 import 'package:gym_tracker/widgets/app_buttons.dart';
+import '../services/database_service.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -19,28 +19,32 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
-  List<MapEntry<dynamic, Routine>> _routineEntries = [];
+  List<RoutineFolder> _folders = [];
+  List<MapEntry<dynamic, Routine>> _unassignedRoutines = [];
+  Map<dynamic, Routine> _allRoutinesMap = {};
+
+  // 💡 State pentru Expand/Collapse: { "id_folder": true/false }
+  final Map<String, bool> _expandedFolders = {};
+
   WorkoutLog? _activeWorkout;
   Timer? _workoutTimer;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(
-        this); // 🦾 Ascultăm starea aplicației (background/foreground)
+    WidgetsBinding.instance.addObserver(this);
     _loadData();
   }
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this); // 🗑️ Scoatem observatorul
-    _workoutTimer?.cancel(); // 🔥 Oprim timerul complet la ieșirea de pe ecran
+    WidgetsBinding.instance.removeObserver(this);
+    _workoutTimer?.cancel();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // 🧠 Când utilizatorul redeschide aplicația din fundal, recalculăm timpul instant
     if (state == AppLifecycleState.resumed) {
       _loadData();
     }
@@ -56,76 +60,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
-  void _loadData() {
-    final entries = routinesBox.toMap().entries.map((entry) {
-      return MapEntry(entry.key, Routine.fromMap(entry.value as Map));
-    }).toList();
-
-    WorkoutLog? active;
-    for (var value in logsBox.values) {
-      final log = WorkoutLog.fromMap(value as Map);
-      if (log.status == WorkoutStatus.started) {
-        active = log;
-        break;
-      }
-    }
-
-    setState(() {
-      _routineEntries = entries;
-      _activeWorkout = active;
-    });
-
-    _startTimer();
-  }
-
-  void _tryStartWorkout(Routine routine) {
-    if (_activeWorkout != null) {
-      _showActiveWorkoutAlert();
-    } else {
-      _navigateToActiveWorkout(routine);
-    }
-  }
-
-  void _startEmptyWorkout() {
-    if (_activeWorkout != null) {
-      _showActiveWorkoutAlert();
-    } else {
-      final emptyRoutine = Routine(
-        title: 'Empty Workout',
-        description: 'Custom session',
-        exercises: [],
-      );
-      _navigateToActiveWorkout(emptyRoutine);
-    }
-  }
-
-  void _navigateToActiveWorkout(Routine routine) async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-          builder: (context) => ActiveWorkoutPage(routine: routine)),
-    );
-    _loadData();
-  }
-
-  void _showActiveWorkoutAlert() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Workout in Progress ⚠️'),
-        content: const Text(
-            'You already have an active workout session. Please finish or cancel the current session before starting a new one.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          )
-        ],
-      ),
-    );
-  }
-
-  // --- DIALOG MODAL DEDICAT ȘTERGERII ANTRENAMENTULUI ACTIV ---
   void _showDiscardWorkoutDialog(dynamic logKey) {
     showDialog(
       context: context,
@@ -148,7 +82,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 icon: const Icon(Icons.delete_forever_outlined),
                 label: const Text('Discard Workout Session'),
                 onPressed: () async {
-                  await logsBox.delete(logKey);
+                  await DatabaseService.logsBox.delete(logKey);
                   if (!context.mounted) return;
                   Navigator.pop(context);
                   _loadData();
@@ -176,6 +110,416 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
+  void _loadData() {
+    final Map<dynamic, Routine> allRoutines = {};
+    DatabaseService.routinesBox.toMap().forEach((key, value) {
+      allRoutines[key] = Routine.fromMap(value as Map);
+    });
+
+    final List<RoutineFolder> folders =
+        DatabaseService.routineFoldersBox.toMap().entries.map((entry) {
+      return RoutineFolder.fromMap(entry.value as Map);
+    }).toList();
+
+    final List<dynamic> assignedKeys = [];
+    for (var folder in folders) {
+      assignedKeys.addAll(folder.routineKeys);
+      // Inițializăm starea de expand implicit ca 'true' dacă folderul nu e deja în map
+      _expandedFolders.putIfAbsent(folder.id, () => true);
+    }
+
+    final List<MapEntry<dynamic, Routine>> unassigned = [];
+    allRoutines.forEach((key, routine) {
+      if (!assignedKeys.contains(key)) {
+        unassigned.add(MapEntry(key, routine));
+      }
+    });
+
+    WorkoutLog? active;
+    for (var value in DatabaseService.logsBox.values) {
+      final log = WorkoutLog.fromMap(value as Map);
+      if (log.status == WorkoutStatus.started) {
+        active = log;
+        break;
+      }
+    }
+
+    setState(() {
+      _allRoutinesMap = allRoutines;
+      _folders = folders;
+      _unassignedRoutines = unassigned;
+      _activeWorkout = active;
+    });
+
+    _startTimer();
+  }
+
+  // --- CREARE FOLDER ---
+  void _showCreateFolderDialog() {
+    final TextEditingController folderNameController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Create New Folder 📁'),
+        content: TextField(
+          controller: folderNameController,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: 'Folder name'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel',
+                style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final name = folderNameController.text.trim();
+              if (name.isNotEmpty) {
+                final newFolder = RoutineFolder(
+                  id: DateTime.now().millisecondsSinceEpoch.toString(),
+                  name: name,
+                  createdAt: DateTime.now(),
+                );
+                await DatabaseService.routineFoldersBox
+                    .put(newFolder.id, newFolder.toMap());
+                if (!context.mounted) return;
+                Navigator.pop(context);
+                _loadData();
+              }
+            },
+            child: const Text('Create'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- 💡 ȘTERGERE FOLDER (EDGE CASE REPARAT: Rutinele nu mor, devin unassigned) ---
+  void _showDeleteFolderDialog(RoutineFolder folder) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delete "${folder.name}"? 🚨'),
+        content: const Text(
+            'Are you sure? The routines inside this folder will NOT be deleted, they will be moved back to the general area.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel',
+                style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () async {
+              await DatabaseService.routineFoldersBox.delete(folder.id);
+              if (!context.mounted) return;
+              Navigator.pop(context);
+              _loadData();
+              TopToast.show(context, 'Folder deleted.',
+                  type: ToastType.success);
+            },
+            child: const Text('Delete Folder',
+                style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- 💡 MODAL MUTARE RUTINĂ ÎN FOLDER (Schimbare Folder) ---
+  void _showChangeFolderDialog(dynamic routineKey) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Move to Folder 📁'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                // Opțiunea de a scoate rutina din orice folder (Mutare la General)
+                ListTile(
+                  leading:
+                      const Icon(Icons.grid_view_rounded, color: Colors.grey),
+                  title: const Text('General / Unassigned'),
+                  onTap: () async {
+                    await _moveRoutineToFolder(routineKey, null);
+                    if (!context.mounted) return;
+                    Navigator.pop(context);
+                  },
+                ),
+                const Divider(),
+                ..._folders.map((folder) {
+                  final bool alreadyInside =
+                      folder.routineKeys.contains(routineKey);
+                  return ListTile(
+                    leading: Icon(Icons.folder,
+                        color: alreadyInside
+                            ? Colors.green
+                            : Theme.of(context).colorScheme.primary),
+                    title: Text(folder.name),
+                    trailing: alreadyInside
+                        ? const Icon(Icons.check, color: Colors.green)
+                        : null,
+                    onTap: alreadyInside
+                        ? null
+                        : () async {
+                            await _moveRoutineToFolder(routineKey, folder.id);
+                            if (!context.mounted) return;
+                            Navigator.pop(context);
+                          },
+                  );
+                }),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // ATOMIC MOVE LOGIC (Garantează că o rutină stă într-un singur folder odată)
+  Future<void> _moveRoutineToFolder(
+      dynamic routineKey, String? targetFolderId) async {
+    // 1. O ștergem din absolut orice folder o mai fi fost înainte
+    for (var f in _folders) {
+      if (f.routineKeys.contains(routineKey)) {
+        f.routineKeys.remove(routineKey);
+        await DatabaseService.routineFoldersBox.put(f.id, f.toMap());
+      }
+    }
+
+    // 2. O adăugăm în folderul destinație, dacă s-a ales unul
+    if (targetFolderId != null) {
+      final targetFolder = RoutineFolder.fromMap(
+          DatabaseService.routineFoldersBox.get(targetFolderId) as Map);
+      targetFolder.routineKeys.add(routineKey);
+      await DatabaseService.routineFoldersBox
+          .put(targetFolderId, targetFolder.toMap());
+    }
+
+    _loadData();
+  }
+
+  // --- ACTIONS DRAWER (ADĂUGAT OPȚIUNEA "CHANGE FOLDER") ---
+  void _showRoutineOptionsSheet(
+      BuildContext context, Routine routine, dynamic routineKey) {
+    AppActionsSheet.show(
+      context: context,
+      title: routine.title,
+      actions: [
+        SheetActionItem(
+          icon: Icons.visibility_outlined,
+          label: 'View Routine',
+          onPressed: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (context) => RoutineDetailPage(
+                      routine: routine, routineKey: routineKey)),
+            );
+            _loadData();
+          },
+        ),
+        SheetActionItem(
+          icon: Icons.edit_outlined,
+          label: 'Edit Routine',
+          color: Colors.orangeAccent,
+          onPressed: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (context) => RoutineFormPage(
+                      routine: routine, routineKey: routineKey)),
+            );
+            _loadData();
+          },
+        ),
+        // 💡 OPTIUNEA NOUĂ: Change Folder
+        SheetActionItem(
+          icon: Icons.folder_open_outlined,
+          label: 'Change Folder',
+          onPressed: () {
+            _showChangeFolderDialog(routineKey);
+          },
+        ),
+        SheetActionItem(
+          icon: Icons.share_outlined,
+          label: 'Share Routine (Copy Code)',
+          onPressed: () async {
+            final shareCode = routine.toShareCode();
+            await Clipboard.setData(ClipboardData(text: shareCode));
+            if (!context.mounted) return;
+            TopToast.show(
+                context, '"${routine.title}" code copied successfully! 🦾',
+                type: ToastType.success);
+          },
+        ),
+        SheetActionItem(
+          icon: Icons.delete_outline,
+          label: 'Delete Routine',
+          color: Colors.redAccent,
+          onPressed: () {
+            _showDeleteConfirmationDialog(context, routineKey, routine.title);
+          },
+        ),
+      ],
+    );
+  }
+
+  // 💡 EDGE CASE REPARAT: Când se șterge rutina, o curățăm și din folderul ei!
+  void _showDeleteConfirmationDialog(
+      BuildContext context, dynamic routineKey, String title) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Routine? 🚨'),
+        content: Text(
+            'Are you sure you want to delete "$title"? This will not affect your workout history.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Cancel',
+                  style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () async {
+              // Curățăm din foldere mai întâi
+              for (var folder in _folders) {
+                if (folder.routineKeys.contains(routineKey)) {
+                  folder.routineKeys.remove(routineKey);
+                  await DatabaseService.routineFoldersBox
+                      .put(folder.id, folder.toMap());
+                }
+              }
+              // Ștergem rutina propriu-zisă
+              await DatabaseService.routinesBox.delete(routineKey);
+              if (!context.mounted) return;
+              Navigator.pop(context);
+              _loadData();
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // RENDER CARD RUTINĂ
+  Widget _buildRoutineCard(Routine routine, dynamic routineKey) {
+    final String exercisesPreview = routine.exercises.isEmpty
+        ? "No exercises added yet"
+        : routine.exercises.map((e) {
+            final rawExercise = DatabaseService.exercisesBox.get(e.exerciseId);
+            String name = 'Unknown';
+            if (rawExercise != null) {
+              name = rawExercise is Map
+                  ? (rawExercise['name'] ?? 'Unknown')
+                  : rawExercise.name;
+            }
+            return "$name (${e.targetSetsCount}x)";
+          }).join(', ');
+
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (context) => RoutineDetailPage(
+                    routine: routine, routineKey: routineKey)),
+          );
+          _loadData();
+        },
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                      child: Text(routine.title,
+                          style: Theme.of(context).textTheme.titleLarge)),
+                  IconButton(
+                    icon: const Icon(Icons.more_horiz),
+                    onPressed: () =>
+                        _showRoutineOptionsSheet(context, routine, routineKey),
+                  ),
+                ],
+              ),
+              Text(exercisesPreview,
+                  style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontSize: 12),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis),
+              const SizedBox(height: 16),
+              AppGhostButton(
+                label: 'Start Workout',
+                icon: Icons.play_arrow,
+                onPressed: () => _tryStartWorkout(routine),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // METODE ACTIVE WORKOUT (Păstrate intacte din varianta ta)
+  void _navigateToActiveWorkout(Routine routine) async {
+    await Navigator.push(
+        context,
+        MaterialPageRoute(
+            builder: (context) => ActiveWorkoutPage(routine: routine)));
+    _loadData();
+  }
+
+  void _tryStartWorkout(Routine routine) {
+    if (_activeWorkout != null) {
+      _showActiveWorkoutAlert();
+    } else {
+      _navigateToActiveWorkout(routine);
+    }
+  }
+
+  void _showActiveWorkoutAlert() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Workout in Progress ⚠️'),
+        content: const Text(
+            'You already have an active workout session. Please finish or cancel the current session before starting a new one.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          )
+        ],
+      ),
+    );
+  }
+
+  void _startEmptyWorkout() {
+    if (_activeWorkout != null) {
+      _showActiveWorkoutAlert();
+    } else {
+      _navigateToActiveWorkout(Routine(
+          title: 'Empty Workout',
+          description: 'Custom session',
+          exercises: []));
+    }
+  }
+
   String _getWorkoutDurationString(DateTime startTime) {
     final difference = DateTime.now().difference(startTime);
     final hours = difference.inHours;
@@ -190,7 +534,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     return '$minutes:$seconds';
   }
 
-  // --- DRAWER PENTRU IMPORT ROUTINE ---
   void _showImportRoutineSheet() {
     final TextEditingController codeController = TextEditingController();
     final theme = Theme.of(context);
@@ -274,7 +617,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                             final importedRoutine = Routine.fromShareCode(code);
 
                             if (importedRoutine != null) {
-                              await routinesBox.add(importedRoutine.toMap());
+                              await DatabaseService.routinesBox
+                                  .add(importedRoutine.toMap());
                               if (!context.mounted) return;
                               Navigator.pop(context);
                               _loadData();
@@ -304,159 +648,41 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
-  // --- DRAWER-UL DE JOS PENTRU OPȚIUNI (MODAL BOTTOM SHEET) ---
-  void _showRoutineOptionsSheet(
-      BuildContext context, Routine routine, dynamic routineKey) {
-    // 💡 Apelăm direct componenta noastră reutilizabilă și upgradată
-    AppActionsSheet.show(
-      context: context,
-      title: routine.title,
-      // subtitle: 'Manage routine options', // Opțional, poți pune și null
-      actions: [
-        // 1. Vizualizare
-        SheetActionItem(
-          icon: Icons.visibility_outlined,
-          label: 'View Routine',
-          onPressed: () async {
-            // Nu mai pui Navigator.pop aici, pentru că se ocupă componenta automat!
-            await Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) =>
-                    RoutineDetailPage(routine: routine, routineKey: routineKey),
-              ),
-            );
-            _loadData();
-          },
-        ),
-
-        // 2. Editare (cu culoarea portocalie pe care o aveai)
-        SheetActionItem(
-          icon: Icons.edit_outlined,
-          label: 'Edit Routine',
-          color: Colors.orangeAccent, // Își păstrează stilul custom
-          onPressed: () async {
-            await Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) =>
-                    RoutineFormPage(routine: routine, routineKey: routineKey),
-              ),
-            );
-            _loadData();
-          },
-        ),
-
-        // 3. Share (Notă: SheetActionItem-ul nostru simplu nu are proprietate de subtitle,
-        // dar label-ul e suficient de clar)
-        SheetActionItem(
-          icon: Icons.share_outlined,
-          label: 'Share Routine (Copy Code)',
-          onPressed: () async {
-            final shareCode = routine.toShareCode();
-            await Clipboard.setData(ClipboardData(text: shareCode));
-            if (!context.mounted) return;
-            TopToast.show(
-                context, '"${routine.title}" code copied successfully! 🦾',
-                type: ToastType.success);
-          },
-        ),
-
-        // 4. Ștergere (cu roșu, exact cum ai vrut)
-        SheetActionItem(
-          icon: Icons.delete_outline,
-          label: 'Delete Routine',
-          color: Colors
-              .redAccent, // 💡 Trick-ul cu roșu funcționează brici și aici
-          onPressed: () {
-            _showDeleteConfirmationDialog(context, routineKey, routine.title);
-          },
-        ),
-      ],
-    );
-  }
-
-  void _showDeleteConfirmationDialog(
-      BuildContext context, dynamic routineKey, String title) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Routine? 🚨'),
-        content: Text(
-            'Are you sure you want to delete "$title"? This will not affect your workout history.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text('Cancel',
-                  style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant))),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-            onPressed: () async {
-              await routinesBox.delete(routineKey);
-              if (!context.mounted) return;
-              Navigator.pop(context);
-              _loadData();
-              ScaffoldMessenger.of(context)
-                  .showSnackBar(SnackBar(content: Text('"$title" deleted.')));
-            },
-            child: const Text('Delete', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('GymTracker'),
-      ),
+      appBar: AppBar(title: const Text('GymTracker')),
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 8.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 1. ANTRENAMENTUL ÎN DESFĂȘURARE (Modernizat, Slim, Compact cu Live Timer)
+              // 1. active_workout
               if (_activeWorkout != null) ...[
                 Padding(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 16.0, vertical: 6.0),
                   child: Card(
-                    // color: Colors.amber.withOpacity(0.08),
-                    color: Theme.of(context)
-                        .colorScheme
-                        .secondary
-                        .withOpacity(0.2),
+                    color: theme.colorScheme.secondary.withOpacity(0.2),
                     shape: RoundedRectangleBorder(
-                      side: BorderSide(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .secondary
-                              .withOpacity(0.7),
-                          width: 1.0),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
+                        side: BorderSide(
+                            color:
+                                theme.colorScheme.secondary.withOpacity(0.7)),
+                        borderRadius: BorderRadius.circular(10)),
                     child: InkWell(
                       borderRadius: BorderRadius.circular(10),
-                      onTap: () {
-                        _navigateToActiveWorkout(Routine(
-                            title: _activeWorkout!.routineTitle,
-                            exercises: []));
-                      },
+                      onTap: () => _navigateToActiveWorkout(Routine(
+                          title: _activeWorkout!.routineTitle, exercises: [])),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 14.0, vertical: 12.0),
                         child: Row(
                           children: [
                             Icon(Icons.lens,
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .secondary
+                                color: theme.colorScheme.secondary
                                     .withOpacity(0.7),
                                 size: 10),
                             const SizedBox(width: 12),
@@ -465,47 +691,67 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'Workout (${_getWorkoutDurationString(_activeWorkout!.startTime)})',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .secondary
-                                          .withOpacity(0.7),
-                                    ),
-                                  ),
+                                      'Workout (${_getWorkoutDurationString(_activeWorkout!.startTime)})',
+                                      style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold,
+                                          color: theme.colorScheme.secondary
+                                              .withOpacity(0.7))),
                                   const SizedBox(height: 2),
-                                  Text(
-                                    _activeWorkout!.routineTitle,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w500,
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSurface,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
+                                  Text(_activeWorkout!.routineTitle,
+                                      style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis),
                                 ],
                               ),
                             ),
                             IconButton(
-                              icon: Icon(Icons.close,
-                                  color:
-                                      Theme.of(context).colorScheme.onSurface,
-                                  size: 20),
-                              tooltip: 'Discard session',
+                              icon: const Icon(Icons.close, size: 20),
                               onPressed: () {
-                                final activeEntry = logsBox
-                                    .toMap()
-                                    .entries
-                                    .firstWhere((e) =>
-                                        WorkoutLog.fromMap(e.value as Map)
-                                            .status ==
-                                        WorkoutStatus.started);
-                                _showDiscardWorkoutDialog(activeEntry.key);
+                                try {
+                                  dynamic activeKey;
+
+                                  for (var key
+                                      in DatabaseService.logsBox.keys) {
+                                    final val =
+                                        DatabaseService.logsBox.get(key);
+                                    if (val is Map) {
+                                      final statusVal =
+                                          val['status']?.toString();
+                                      if (statusVal == 'started' ||
+                                          statusVal ==
+                                              'WorkoutStatus.started' ||
+                                          statusVal ==
+                                              WorkoutStatus.started.name) {
+                                        activeKey = key;
+                                        break;
+                                      }
+                                    }
+                                  }
+
+                                  if (activeKey != null) {
+                                    print(
+                                        "🚀 [X Button] Trimit cheia $activeKey către _showDiscardWorkoutDialog...");
+                                    _showDiscardWorkoutDialog(activeKey);
+                                  } else {
+                                    print(
+                                        "⚠️ [X Button] Nu am găsit niciun status 'started'. Încerc fallback pe ultima cheie.");
+                                    if (DatabaseService.logsBox.isNotEmpty) {
+                                      final lastKey =
+                                          DatabaseService.logsBox.keys.last;
+                                      print(
+                                          "🚀 [X Button] Trimit ultima cheie ($lastKey) ca fallback...");
+                                      _showDiscardWorkoutDialog(lastKey);
+                                    } else {
+                                      print(
+                                          "❌ [X Button] logsBox este complet gol în Hive!");
+                                    }
+                                  }
+                                } catch (e) {
+                                  print("💥 [X Button] Crash în buclă: $e");
+                                }
                               },
                             ),
                           ],
@@ -514,187 +760,204 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     ),
                   ),
                 ),
-                const SizedBox(height: 4),
               ],
 
-              // 2. BUTONUL: START EMPTY WORKOUT
+              // 2. BUTTON START EMPTY WORKOUT
               if (_activeWorkout == null) ...[
                 Padding(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 16.0, vertical: 8.0),
                   child: AppOutlinedButton(
-                    label: 'Start Empty Workout',
-                    icon: Icons.add,
-                    onPressed: _startEmptyWorkout,
-                  ),
+                      label: 'Start Empty Workout',
+                      icon: Icons.add,
+                      onPressed: _startEmptyWorkout),
                 ),
               ],
 
-              // 3. SECȚIUNEA DE HEADER PENTRU RUTINE + ACȚIUNI
+              // 3. ROUTINES LABEL & ACTION ROW
               Padding(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 16.0, vertical: 12.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      'Routines',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
+                    Text('Routines',
+                        style: TextStyle(
+                            color: theme.colorScheme.onSurfaceVariant,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold)),
+                    IconButton(
+                        icon: const Icon(Icons.create_new_folder_outlined),
+                        tooltip: 'Create New Folder',
+                        onPressed: _showCreateFolderDialog),
+                  ],
+                ),
+              ),
+
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 3,
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            side: BorderSide(
+                                color:
+                                    theme.colorScheme.primary.withOpacity(0.5)),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10))),
+                        icon: Icon(Icons.playlist_add,
+                            color: theme.colorScheme.primary),
+                        label: Text('New Routine',
+                            style: TextStyle(
+                                color: theme.colorScheme.primary,
+                                fontWeight: FontWeight.bold)),
+                        onPressed: () async {
+                          await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (context) =>
+                                      const RoutineFormPage()));
+                          _loadData();
+                        },
                       ),
                     ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          flex: 3,
-                          child: OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              side: BorderSide(
-                                  color: theme.colorScheme.primary
-                                      .withOpacity(0.5)),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10)),
-                            ),
-                            icon: Icon(Icons.playlist_add,
-                                color: theme.colorScheme.primary),
-                            label: Text(
-                              'New Routine',
-                              style: TextStyle(
-                                  color: theme.colorScheme.primary,
-                                  fontWeight: FontWeight.bold),
-                            ),
-                            onPressed: () async {
-                              await Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (context) =>
-                                        const RoutineFormPage()),
-                              );
-                              _loadData();
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          flex: 2,
-                          child: OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              side: BorderSide(
-                                  color: theme.colorScheme.onSurfaceVariant
-                                      .withOpacity(0.3)),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10)),
-                            ),
-                            icon: Icon(Icons.folder_zip_outlined,
-                                color: theme.colorScheme.onSurfaceVariant),
-                            label: Text(
-                              'Import',
-                              style: TextStyle(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                  fontWeight: FontWeight.w600),
-                            ),
-                            onPressed: _showImportRoutineSheet,
-                          ),
-                        ),
-                      ],
+                    const SizedBox(width: 10),
+                    Expanded(
+                      flex: 2,
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            side: BorderSide(
+                                color: theme.colorScheme.onSurfaceVariant
+                                    .withOpacity(0.3)),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10))),
+                        icon: Icon(Icons.folder_zip_outlined,
+                            color: theme.colorScheme.onSurfaceVariant),
+                        label: Text('Import',
+                            style: TextStyle(
+                                color: theme.colorScheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w600)),
+                        onPressed: _showImportRoutineSheet,
+                      ),
                     ),
                   ],
                 ),
               ),
 
-              // 4. LISTA DE RUTINE
-              if (_routineEntries.isEmpty)
+              const SizedBox(height: 16),
+
+              // 4. RANDĂRI LISTĂ BAZATĂ PE FOLDERE
+              if (_folders.isEmpty && _unassignedRoutines.isEmpty)
                 Padding(
                   padding: const EdgeInsets.all(32.0),
                   child: Center(
                       child: Text(
                           'No routines found. Create your first one above!',
-                          style: Theme.of(context).textTheme.bodyMedium)),
-                )
-              else
-                ..._routineEntries.map((entry) {
-                  final routineKey = entry.key;
-                  final routine = entry.value;
+                          style: theme.textTheme.bodyMedium)),
+                ),
 
-                  final String exercisesPreview = routine.exercises.isEmpty
-                      ? "No exercises added yet"
-                      : routine.exercises.map((e) {
-                          final rawExercise = exercisesBox.get(e.exerciseId);
-                          String name = 'Unknown';
-                          if (rawExercise != null) {
-                            name = rawExercise is Map
-                                ? (rawExercise['name'] ?? 'Unknown')
-                                : rawExercise.name;
-                          }
-                          // 🦾 Adăugăm numărul de seturi direct în string-ul de preview
-                          return "$name (${e.targetSetsCount}x)";
-                        }).join(', ');
+              // A. FOLDERE CU DESIGN INTERACTIV (COLLAPSE / EXPAND / DELETE)
+              ..._folders.map((folder) {
+                final bool isExpanded = _expandedFolders[folder.id] ?? true;
 
-                  return Card(
-                      margin: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 4),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(12),
-                        onTap: () async {
-                          await Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (context) => RoutineDetailPage(
-                                      routine: routine,
-                                      routineKey: routineKey)));
-                          _loadData();
-                        },
-                        child: Padding(
-                          // padding: const EdgeInsets.all(16.0),
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Expanded(
-                                      child: Text(routine.title,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .titleLarge)),
-                                  IconButton(
-                                    icon: Icon(Icons.more_horiz,
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurfaceVariant),
-                                    onPressed: () => _showRoutineOptionsSheet(
-                                        context, routine, routineKey),
-                                  ),
-                                ],
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 💡 ÎNTREGUL RÂND ESTE INTERACTIV ACUM (InkWell + Chevron controlat)
+                    InkWell(
+                      onTap: () {
+                        setState(() {
+                          _expandedFolders[folder.id] = !isExpanded;
+                        });
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16.0, vertical: 10.0),
+                        child: Row(
+                          children: [
+                            // Chevron cu animație fină de rotație automată în funcție de stare
+                            AnimatedRotation(
+                              duration: const Duration(milliseconds: 200),
+                              turns: isExpanded
+                                  ? 0.25
+                                  : 0.0, // 90 de grade rotație când e deschis
+                              child: const Icon(Icons.chevron_right,
+                                  size: 20, color: Colors.grey),
+                            ),
+                            const SizedBox(width: 4),
+                            Icon(Icons.folder,
+                                size: 20, color: theme.colorScheme.primary),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                folder.name,
+                                style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold,
+                                    color: theme.colorScheme.onSurface),
                               ),
-                              Text(exercisesPreview,
-                                  style: TextStyle(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.normal,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis),
-                              const SizedBox(height: 16),
-                              AppGhostButton(
-                                label: 'Start Workout',
-                                icon: Icons.play_arrow,
-                                onPressed: () => _tryStartWorkout(routine),
-                              ),
-                            ],
-                          ),
+                            ),
+                            // Buton discret de ștergere folder în capătul rândului
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline,
+                                  size: 18, color: Colors.grey),
+                              onPressed: () => _showDeleteFolderDialog(folder),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          ],
                         ),
-                      ));
-                }),
+                      ),
+                    ),
+
+                    // Condiție pentru randarea rutinelor dacă folderul este Expanded
+                    if (isExpanded) ...[
+                      if (folder.routineKeys.isEmpty)
+                        const Padding(
+                          padding:
+                              EdgeInsets.only(left: 44.0, bottom: 12.0, top: 4),
+                          child: Text('Empty folder',
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey,
+                                  fontStyle: FontStyle.italic)),
+                        )
+                      else
+                        ...folder.routineKeys.map((key) {
+                          final routine = _allRoutinesMap[key];
+                          if (routine == null) return const SizedBox.shrink();
+                          return _buildRoutineCard(routine, key);
+                        }),
+                    ],
+                  ],
+                );
+              }),
+
+              // B. SECȚIUNEA GENERALĂ (UNASSIGNED)
+              if (_unassignedRoutines.isNotEmpty) ...[
+                const Padding(
+                  padding: EdgeInsets.only(left: 20.0, top: 20.0, bottom: 6.0),
+                  child: Row(
+                    children: [
+                      Icon(Icons.grid_view_rounded,
+                          size: 16, color: Colors.grey),
+                      SizedBox(width: 8),
+                      Text('General Routines',
+                          style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.grey)),
+                    ],
+                  ),
+                ),
+                ..._unassignedRoutines
+                    .map((entry) => _buildRoutineCard(entry.value, entry.key)),
+              ],
+
               const SizedBox(height: 40),
             ],
           ),

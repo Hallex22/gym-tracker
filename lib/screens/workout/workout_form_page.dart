@@ -3,9 +3,9 @@ import 'package:gym_tracker/enums/workout_status.dart';
 import 'package:gym_tracker/screens/exercises/exercise_detail_page.dart';
 import 'package:gym_tracker/screens/exercises/exercise_selection_page.dart';
 import 'package:gym_tracker/widgets/app_buttons.dart';
-import '../../main.dart';
 import '../../models/models.dart';
 import '../../enums/enums.dart';
+import '../../services/database_service.dart';
 import '../../widgets/app_actions_sheet.dart';
 
 /// Pagina de editare pentru un antrenament DEJA FINALIZAT (status = finished).
@@ -66,7 +66,7 @@ class _WorkoutFormPageState extends State<WorkoutFormPage> {
 
   void _buildExerciseCache() {
     _exerciseCache = {};
-    for (var raw in exercisesBox.values) {
+    for (var raw in DatabaseService.exercisesBox.values) {
       final ex = Exercise.fromMap(raw as Map);
       _exerciseCache[ex.id] = ex;
     }
@@ -192,7 +192,7 @@ class _WorkoutFormPageState extends State<WorkoutFormPage> {
       status: WorkoutStatus.finished,
     );
 
-    await logsBox.put(widget.logKey, updatedLog.toMap());
+    await DatabaseService.logsBox.put(widget.logKey, updatedLog.toMap());
 
     if (!mounted) return;
     Navigator.pop(context, true); // true = a fost salvat, caller poate reface

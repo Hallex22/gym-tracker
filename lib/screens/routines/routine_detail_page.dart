@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:gym_tracker/screens/exercises/exercise_detail_page.dart';
 import 'package:gym_tracker/screens/routines/routine_form_page.dart';
-import '../../main.dart'; // Pentru acces la routinesBox și exercisesBox
 import '../../models/models.dart';
-import '../../widgets/app_actions_sheet.dart'; // Importul drawer-ului tău custom
+import '../../services/database_service.dart';
+import '../../widgets/app_actions_sheet.dart';
 import '../workout/active_workout_page.dart';
 
 class RoutineDetailPage extends StatefulWidget {
@@ -123,7 +123,7 @@ class _RoutineDetailPageState extends State<RoutineDetailPage> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
             onPressed: () async {
-              await routinesBox.delete(widget.routineKey);
+              await DatabaseService.routinesBox.delete(widget.routineKey);
               if (!context.mounted) return;
 
               Navigator.pop(context); // Închidem dialogul
@@ -209,7 +209,7 @@ class _RoutineDetailPageState extends State<RoutineDetailPage> {
 
                       // Extragem obiectul full Exercise din cutia globală Hive
                       final rawExerciseData =
-                          exercisesBox.get(routineExercise.exerciseId);
+                          DatabaseService.exercisesBox.get(routineExercise.exerciseId);
 
                       Exercise? fullExercise;
                       String exerciseName = 'Unknown Exercise';

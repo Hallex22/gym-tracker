@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../enums/enums.dart';
-import '../../main.dart'; // Pentru accesul la exercisesBox
 import '../../models/models.dart';
+import '../../services/database_service.dart';
 import '../exercises/exercise_detail_page.dart'; // Import pentru navigare detalii
 
 class ExerciseExplorePage extends StatefulWidget {
@@ -28,7 +28,7 @@ class _ExerciseExplorePageState extends State<ExerciseExplorePage> {
     // Încărcăm absolut toate exercițiile existente în cache
     setState(() {
       _allAvailableExercises =
-          exercisesBox.values.map((e) => Exercise.fromMap(e as Map)).toList();
+          DatabaseService.exercisesBox.values.map((e) => Exercise.fromMap(e as Map)).toList();
     });
   }
 

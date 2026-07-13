@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:gym_tracker/enums/workout_status.dart';
 import 'package:table_calendar/table_calendar.dart';
-import '../../main.dart';
 import '../../models/models.dart';
+import '../../services/database_service.dart';
 import '../workout/workout_detail_page.dart';
 
 enum CalendarViewMode { month, year }
@@ -35,7 +35,7 @@ class _CalendarPageState extends State<CalendarPage> {
   void _loadWorkoutsHistory() {
     final Map<DateTime, List<dynamic>> groupedWorkouts = {};
 
-    for (var value in logsBox.values) {
+    for (var value in DatabaseService.logsBox.values) {
       final workout = WorkoutLog.fromMap(value as Map);
 
       if (workout.endTime != null && workout.status == WorkoutStatus.finished) {
@@ -178,7 +178,7 @@ class _CalendarPageState extends State<CalendarPage> {
                             // 💡 REPARAT: Căutăm cheia din Hive comparând obiectul sau timestamp-urile milisecunde
                             dynamic correctLogKey;
 
-                            for (var entry in logsBox.toMap().entries) {
+                            for (var entry in DatabaseService.logsBox.toMap().entries) {
                               final dbLog =
                                   WorkoutLog.fromMap(entry.value as Map);
                               if (dbLog.startTime.millisecondsSinceEpoch ==

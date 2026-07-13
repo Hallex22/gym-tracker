@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:gym_tracker/utils/date_utils.dart';
-import '../../main.dart';
 import '../../models/models.dart';
+import '../../services/database_service.dart';
 import '../../widgets/app_actions_sheet.dart';
-import '../exercises/exercise_detail_page.dart'; // 💡 Import adăugat pentru detalii
+import '../exercises/exercise_detail_page.dart';
 import 'workout_form_page.dart';
 
 class WorkoutDetailPage extends StatefulWidget {
-  final dynamic
-      logKey; // Cheia unică din logsBox pentru a putea șterge/edita direct
+  final dynamic logKey;
   final WorkoutLog log;
 
   const WorkoutDetailPage({
@@ -31,12 +30,165 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
   }
 
   void _refreshLogData() {
-    final updatedData = logsBox.get(widget.logKey);
+    final updatedData = DatabaseService.logsBox.get(widget.logKey);
     if (updatedData != null) {
       setState(() {
         _currentLog = WorkoutLog.fromMap(updatedData as Map);
       });
     }
+  }
+
+// --- 💡 LOGICA DE CALCUL OPTIMIZATĂ PENTRU STRUCTURA MODELULUI TĂU ---
+  Map<String, double> _calculateMuscleDistribution() {
+    final Map<String, double> muscleScores = {};
+    double totalScore = 0.0;
+
+    for (var loggedExercise in _currentLog.exercises) {
+      final rawExerciseData =
+          DatabaseService.exercisesBox.get(loggedExercise.exerciseId);
+      if (rawExerciseData == null) continue;
+
+      Exercise? exercise;
+      if (rawExerciseData is Map) {
+        exercise = Exercise.fromMap(rawExerciseData);
+      } else if (rawExerciseData is Exercise) {
+        exercise = rawExerciseData;
+      }
+
+      if (exercise == null) continue;
+
+      final int setsCount = loggedExercise.sets.length;
+      if (setsCount == 0) continue;
+
+      // 1. Procesăm mușchii primari (Pondere 100%)
+      for (var target in exercise.primaryMuscles) {
+        final String name = target.group.name
+            .toUpperCase(); // Poți folosi și target.label dacă vrei detalii
+        final double score = setsCount * 1.0;
+        muscleScores[name] = (muscleScores[name] ?? 0.0) + score;
+        totalScore += score;
+      }
+
+      // 2. Procesăm mușchii secundari (Pondere 50%)
+      for (var target in exercise.secondaryMuscles) {
+        final String name = target.group.name.toUpperCase();
+        final double score = setsCount * 0.5;
+        muscleScores[name] = (muscleScores[name] ?? 0.0) + score;
+        totalScore += score;
+      }
+
+      // 3. Procesăm mușchii terțiari (Pondere 25%)
+      for (var target in exercise.tertiaryMuscles) {
+        final String name = target.group.name.toUpperCase();
+        final double score = setsCount * 0.25;
+        muscleScores[name] = (muscleScores[name] ?? 0.0) + score;
+        totalScore += score;
+      }
+    }
+
+    if (totalScore == 0.0) return {};
+
+    // Transformăm scorurile brute în procente (0.0 - 1.0) pentru UI
+    return muscleScores
+        .map((muscle, score) => MapEntry(muscle, score / totalScore));
+  }
+
+  // --- WIDGET FINISAT PENTRU RELEASING REPEDE (ALINIAT ȘI CURAT) ---
+  Widget _buildMuscleDistributionSection(ThemeData theme) {
+    final distribution = _calculateMuscleDistribution();
+
+    if (distribution.isEmpty) return const SizedBox.shrink();
+
+    // Sortăm descrescător după importanță
+    final sortedEntries = distribution.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Muscle Group Split',
+          style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: theme.colorScheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          elevation: 0,
+          color: theme.cardColor.withOpacity(0.4),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: sortedEntries.length,
+              itemBuilder: (context, index) {
+                final entry = sortedEntries[index];
+                final percentage = entry.value;
+                final percentageString =
+                    '${(percentage * 100).toStringAsFixed(0)}%';
+
+                // Înfrumusețăm textul din Enum (ex: "CHEST", "BICEPS", "LOWER_BACK")
+                final displayMuscleName = entry.key.replaceAll('_', ' ');
+
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6.0),
+                  child: Row(
+                    children: [
+                      // Numele grupei musculare cu lungime fixă
+                      SizedBox(
+                        width: 100,
+                        child: Text(
+                          displayMuscleName,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      // Bara nativă cu LinearProgressIndicator
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: percentage,
+                            minHeight: 10,
+                            backgroundColor:
+                                theme.colorScheme.surfaceContainerHighest,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              theme.colorScheme.primary.withOpacity(0.85),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      // Procentul afișat în dreapta
+                      SizedBox(
+                        width: 35,
+                        child: Text(
+                          percentageString,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
+      ],
+    );
   }
 
   void _showOptionsDrawer(BuildContext context) {
@@ -98,7 +250,7 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
     );
 
     if (confirm == true) {
-      await logsBox.delete(widget.logKey);
+      await DatabaseService.logsBox.delete(widget.logKey);
       if (!context.mounted) return;
 
       Navigator.pop(context);
@@ -130,7 +282,7 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // --- HEADER: Titlu Rutină și Dată ---
+            // --- HEADER ---
             Text(
               _currentLog.routineTitle,
               style: TextStyle(
@@ -153,7 +305,7 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
             ),
             const SizedBox(height: 20),
 
-            // --- PANOU STATISTICI RAPIDE ---
+            // --- PANOU STATISTICI ---
             Card(
               elevation: 0,
               color: theme.cardColor.withOpacity(0.6),
@@ -181,6 +333,9 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
             ),
             const SizedBox(height: 24),
 
+            // 💡 ACUM SE RANDAZĂ MINI-GRAFICUL DE DISTRIBUȚIE MUSCULARĂ
+            _buildMuscleDistributionSection(theme),
+
             // --- LISTA DE EXERCIȚII EFECTUATE ---
             Text(
               'Exercises & Sets',
@@ -206,8 +361,8 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
                 itemCount: _currentLog.exercises.length,
                 itemBuilder: (context, exIndex) {
                   final loggedExercise = _currentLog.exercises[exIndex];
-                  final rawExerciseData =
-                      exercisesBox.get(loggedExercise.exerciseId);
+                  final rawExerciseData = DatabaseService.exercisesBox
+                      .get(loggedExercise.exerciseId);
 
                   Exercise? fullExercise;
                   String exerciseName = 'Unknown Exercise';
@@ -233,7 +388,6 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // 💡 ZONĂ INKWELL PENTRU DETALII EXERCIȚIU
                           InkWell(
                             borderRadius: BorderRadius.circular(8),
                             onTap: () {
@@ -252,7 +406,6 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
                                   vertical: 4.0, horizontal: 2.0),
                               child: Row(
                                 children: [
-                                  // Avatarul circular cu poza exercițiului
                                   CircleAvatar(
                                     radius: 20,
                                     backgroundColor: theme
@@ -270,8 +423,6 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
                                         : null,
                                   ),
                                   const SizedBox(width: 12),
-
-                                  // Numele exercițiului
                                   Expanded(
                                     child: Text(
                                       exerciseName,
@@ -281,8 +432,6 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
                                           color: theme.colorScheme.onSurface),
                                     ),
                                   ),
-
-                                  // Mic indicator să sugereze click-ul (chevron discret)
                                   Icon(
                                     Icons.chevron_right,
                                     color: theme.colorScheme.onSurfaceVariant
@@ -297,8 +446,6 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
                             height: 16,
                             color: theme.colorScheme.primary.withOpacity(0.2),
                           ),
-
-                          // Rândurile cu seturi
                           ...loggedExercise.sets.asMap().entries.map((entry) {
                             int setIdx = entry.key;
                             final set = entry.value;

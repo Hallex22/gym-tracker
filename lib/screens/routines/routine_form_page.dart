@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../enums/enums.dart';
-import '../../main.dart'; // Pentru accesul la routinesBox și exercisesBox
 import '../../models/models.dart';
+import '../../services/database_service.dart';
 import '../../widgets/app_buttons.dart'; // Importul butoanelor reutilizabile
 import '../exercises/exercise_selection_page.dart';
 
@@ -98,9 +97,9 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
     );
 
     if (_isEditMode) {
-      await routinesBox.put(widget.routineKey, routineData.toMap());
+      await DatabaseService.routinesBox.put(widget.routineKey, routineData.toMap());
     } else {
-      await routinesBox.add(routineData.toMap());
+      await DatabaseService.routinesBox.add(routineData.toMap());
     }
 
     if (!mounted) return;
@@ -140,7 +139,7 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
     );
 
     if (confirm == true) {
-      await routinesBox.delete(widget.routineKey);
+      await DatabaseService.routinesBox.delete(widget.routineKey);
       if (!mounted) return;
       Navigator.pop(context);
     }
@@ -246,7 +245,7 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
                         final routineEx = _selectedRoutineExercises[index];
 
                         // 💡 Obținem datele complete ale exercițiului global din Hive pentru UI
-                        final rawEx = exercisesBox.get(routineEx.exerciseId);
+                        final rawEx = DatabaseService.exercisesBox.get(routineEx.exerciseId);
 
                         String exerciseName = 'Unknown Exercise';
                         String extraInfo = 'CORE • BODYWEIGHT';

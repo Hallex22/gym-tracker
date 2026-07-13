@@ -1,12 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:gym_tracker/enums/workout_status.dart';
 import 'package:gym_tracker/screens/exercises/exercise_detail_page.dart';
 import 'package:gym_tracker/screens/exercises/exercise_selection_page.dart';
 import 'package:gym_tracker/widgets/app_buttons.dart';
-import '../../../main.dart';
 import '../../../models/models.dart';
 import '../../enums/enums.dart';
+import '../../services/database_service.dart';
 import '../../widgets/app_actions_sheet.dart';
 
 class ActiveWorkoutPage extends StatefulWidget {
@@ -47,7 +46,7 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
 
   void _buildExerciseCache() {
     _exerciseCache = {};
-    for (var raw in exercisesBox.values) {
+    for (var raw in DatabaseService.exercisesBox.values) {
       final ex = Exercise.fromMap(raw as Map);
       _exerciseCache[ex.id] = ex;
     }
@@ -65,7 +64,7 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
   void _loadOrInitializeWorkout() {
     MapEntry<dynamic, dynamic>? existingActiveEntry;
 
-    for (var entry in logsBox.toMap().entries) {
+    for (var entry in DatabaseService.logsBox.toMap().entries) {
       final log = WorkoutLog.fromMap(entry.value as Map);
       if (log.status == WorkoutStatus.started) {
         existingActiveEntry = entry;
@@ -123,7 +122,7 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
       exercises: List.from(_activeExercises),
       status: WorkoutStatus.started,
     );
-    _currentLogKey = await logsBox.add(initialLog.toMap());
+    _currentLogKey = await DatabaseService.logsBox.add(initialLog.toMap());
   }
 
   Future<void> _updateLiveProgress() async {
@@ -134,7 +133,7 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
       exercises: List.from(_activeExercises),
       status: WorkoutStatus.started,
     );
-    await logsBox.put(_currentLogKey, currentLog.toMap());
+    await DatabaseService.logsBox.put(_currentLogKey, currentLog.toMap());
   }
 
   void _adjustLiveWorkoutDuration(int targetMinutes) {
@@ -258,7 +257,7 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
   }
 
   LoggedExercise? _getPreviousLogForExercise(int exerciseId) {
-    final allLogs = logsBox.values
+    final allLogs = DatabaseService.logsBox.values
         .map((e) => WorkoutLog.fromMap(e as Map))
         .toList()
         .reversed;
@@ -395,7 +394,7 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
       status: WorkoutStatus.finished,
     );
 
-    await logsBox.put(_currentLogKey, finalLog.toMap());
+    await DatabaseService.logsBox.put(_currentLogKey, finalLog.toMap());
     final duration = endTime.difference(_sessionStart).inMinutes;
 
     if (!mounted) return;
@@ -407,7 +406,7 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
 
   Future<void> _cancelWorkout() async {
     if (_currentLogKey != null) {
-      await logsBox.delete(_currentLogKey);
+      await DatabaseService.logsBox.delete(_currentLogKey);
     }
     if (!mounted) return;
     Navigator.pop(context);

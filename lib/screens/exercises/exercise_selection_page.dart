@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../enums/enums.dart';
-import '../../main.dart'; // Pentru accesul la exercisesBox
 import '../../models/models.dart';
+import '../../services/database_service.dart';
 import '../../widgets/app_buttons.dart';
 import '../exercises/exercise_detail_page.dart'; // Import corect pentru navigare detalii
 
@@ -33,7 +33,7 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
 
   void _loadAvailableExercises() {
     final exercises =
-        exercisesBox.values.map((e) => Exercise.fromMap(e as Map)).toList();
+        DatabaseService.exercisesBox.values.map((e) => Exercise.fromMap(e as Map)).toList();
 
     setState(() {
       if (widget.existingExercisesIds != null &&

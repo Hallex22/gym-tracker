@@ -1,5 +1,4 @@
 import 'dart:convert';
-import '../main.dart';
 
 class Routine {
   String title;

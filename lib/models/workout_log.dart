@@ -1,6 +1,3 @@
-// models/workout_log.dart
-import 'dart:convert';
-
 import 'package:gym_tracker/enums/workout_status.dart';
 
 // Model pentru un singur set efectuat si salvat in istoric

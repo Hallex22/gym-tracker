@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:gym_tracker/enums/workout_status.dart';
 import 'package:gym_tracker/screens/workout/workout_detail_page.dart';
-import '../../main.dart';
 import '../../models/models.dart';
+import '../../services/database_service.dart';
 import 'calendar_page.dart'; // 💡 Importă corect pagina de calendar (ajustează calea dacă e diferită)
 
 class ProfilePage extends StatefulWidget {
@@ -22,10 +22,10 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   void _loadWorkoutHistory() {
-    if (logsBox.isOpen) {
+    if (DatabaseService.logsBox.isOpen) {
       final List<MapEntry<dynamic, WorkoutLog>> allEntries = [];
 
-      for (var entry in logsBox.toMap().entries) {
+      for (var entry in DatabaseService.logsBox.toMap().entries) {
         final log = WorkoutLog.fromMap(entry.value as Map);
         if (log.status == WorkoutStatus.finished) {
           allEntries.add(MapEntry(entry.key, log));
@@ -187,9 +187,10 @@ class _ProfilePageState extends State<ProfilePage> {
                                   formattedDate,
                                   // style: Theme.of(context).textTheme.bodyMedium,
                                   style: TextStyle(
-                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
                                     fontSize: 12,
-                                    
                                   ),
                                 ),
                                 const SizedBox(height: 16),
