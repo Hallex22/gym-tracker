@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:gym_tracker/enums/workout_status.dart';
 import 'package:gym_tracker/screens/routines/routine_detail_page.dart';
 import 'package:gym_tracker/screens/routines/routine_form_page.dart';
+import 'package:gym_tracker/widgets/top_toast.dart';
 import '../main.dart';
 import '../models/models.dart';
 import '../widgets/app_actions_sheet.dart';
@@ -105,24 +106,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           builder: (context) => ActiveWorkoutPage(routine: routine)),
     );
     _loadData();
-  }
-
-  void _showTopSuccessToast(String message) {
-    final overlay = Overlay.of(context);
-    late OverlayEntry overlayEntry;
-
-    overlayEntry = OverlayEntry(
-      builder: (context) {
-        return _TopToastWidget(
-          message: message,
-          onDismiss: () {
-            overlayEntry.remove();
-          },
-        );
-      },
-    );
-
-    overlay.insert(overlayEntry);
   }
 
   void _showActiveWorkoutAlert() {
@@ -295,8 +278,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                               if (!context.mounted) return;
                               Navigator.pop(context);
                               _loadData();
-                              _showTopSuccessToast(
-                                  'Successfully imported "${importedRoutine.title}"! 🏋️‍♂️');
+                              TopToast.show(context,
+                                  'Successfully imported "${importedRoutine.title}"! 🏋️‍♂️',
+                                  type: ToastType.success);
                             } else {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
@@ -372,8 +356,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             final shareCode = routine.toShareCode();
             await Clipboard.setData(ClipboardData(text: shareCode));
             if (!context.mounted) return;
-            _showTopSuccessToast(
-                '"${routine.title}" code copied successfully! 🦾');
+            TopToast.show(
+                context, '"${routine.title}" code copied successfully! 🦾',
+                type: ToastType.success);
           },
         ),
 
@@ -547,16 +532,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
               // 3. SECȚIUNEA DE HEADER PENTRU RUTINE + ACȚIUNI
               Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0, vertical: 12.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       'Routines',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: theme.colorScheme.onSurfaceVariant,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                     const SizedBox(height: 10),
@@ -651,7 +637,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
                   return Card(
                       margin: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 6),
+                          horizontal: 16, vertical: 4),
                       child: InkWell(
                         borderRadius: BorderRadius.circular(12),
                         onTap: () async {
@@ -664,7 +650,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                           _loadData();
                         },
                         child: Padding(
-                          padding: const EdgeInsets.all(16.0),
+                          // padding: const EdgeInsets.all(16.0),
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -688,7 +675,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                 ],
                               ),
                               Text(exercisesPreview,
-                                  style: Theme.of(context).textTheme.bodyMedium,
+                                  style: TextStyle(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.normal,
+                                  ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis),
                               const SizedBox(height: 16),
@@ -704,110 +697,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 }),
               const SizedBox(height: 40),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// --- PRIVATE WIDGET: TOP TOAST ---
-class _TopToastWidget extends StatefulWidget {
-  final String message;
-  final VoidCallback onDismiss;
-
-  const _TopToastWidget({required this.message, required this.onDismiss});
-
-  @override
-  State<_TopToastWidget> createState() => _TopToastWidgetState();
-}
-
-class _TopToastWidgetState extends State<_TopToastWidget>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<Offset> _offsetAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 400),
-      vsync: this,
-    );
-
-    _offsetAnimation = Tween<Offset>(
-      begin: const Offset(0.0, -1.5),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeOutBack,
-    ));
-
-    _controller.forward();
-
-    Future.delayed(const Duration(milliseconds: 2500), () async {
-      if (mounted) {
-        await _controller.reverse();
-        widget.onDismiss();
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _controller
-        .dispose(); // ✨ Curățat corect, fără apelul greșit spre _workoutTimer
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: SlideTransition(
-        position: _offsetAnimation,
-        child: Align(
-          alignment: Alignment.topCenter,
-          child: Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-            child: Material(
-              color: Colors.transparent,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 16.0, vertical: 14.0),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF0F5132),
-                  borderRadius: BorderRadius.circular(12),
-                  border:
-                      Border.all(color: const Color(0xFF198754), width: 1.5),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.3),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    )
-                  ],
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.check_circle,
-                        color: Color(0xFF25D366), size: 22),
-                    const SizedBox(width: 12),
-                    Flexible(
-                      child: Text(
-                        widget.message,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
           ),
         ),
       ),

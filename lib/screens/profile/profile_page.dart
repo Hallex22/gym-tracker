@@ -120,7 +120,12 @@ class _ProfilePageState extends State<ProfilePage> {
                     alignment: Alignment.centerLeft,
                     child: Text(
                       'Past Sessions',
-                      style: Theme.of(context).textTheme.bodyMedium,
+                      // style: Theme.of(context).textTheme.bodyMedium,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
                 ),
@@ -180,7 +185,12 @@ class _ProfilePageState extends State<ProfilePage> {
                                 const SizedBox(height: 4),
                                 Text(
                                   formattedDate,
-                                  style: Theme.of(context).textTheme.bodyMedium,
+                                  // style: Theme.of(context).textTheme.bodyMedium,
+                                  style: TextStyle(
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                    fontSize: 12,
+                                    
+                                  ),
                                 ),
                                 const SizedBox(height: 16),
                                 Row(
@@ -190,7 +200,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                         'TIME',
                                         style: TextStyle(
                                             fontSize: 11,
-                                            fontWeight: FontWeight.bold,
+                                            fontWeight: FontWeight.w500,
                                             color: Theme.of(context)
                                                 .colorScheme
                                                 .onSurfaceVariant,
@@ -202,7 +212,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                         'VOLUME',
                                         style: TextStyle(
                                             fontSize: 11,
-                                            fontWeight: FontWeight.bold,
+                                            fontWeight: FontWeight.w500,
                                             color: Theme.of(context)
                                                 .colorScheme
                                                 .onSurfaceVariant,

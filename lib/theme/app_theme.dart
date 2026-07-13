@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
   static const Color _backgroundColor = Color(0xFF0F0E17);
@@ -9,13 +8,26 @@ class AppTheme {
   static const Color _purpleContainer = Color(0xFF5A189A);
   static const Color _purpleSecondary = Color(0xFFE0AAFF);
 
-  // --- CULORILE DE TEXT PROPUSE DE TINE ---
-  static const Color _textMain = Color(0xFFFFFFFE); // Alb strălucitor
-  static const Color _textMuted = Color(0xFF94A1B2); // Gri-albăstrui discret
-  static const Color _textOnPrimary = Color(0xFFFFFFFF); // Textul de peste mov
+  static const Color _textMain = Color(0xFFFFFFFE);
+  static const Color _textMuted = Color(0xFF94A1B2);
+  static const Color _textOnPrimary = Color(0xFFFFFFFF);
+
+  static const String _fontFamily = 'Inter';
 
   static ThemeData get darkTheme {
-    return ThemeData.dark().copyWith(
+    // 💡 1. Definim TextTheme-ul de bază cu culorile tale custom
+    const baseTextTheme = TextTheme(
+      headlineMedium: TextStyle(color: _textMain, fontWeight: FontWeight.bold),
+      titleLarge: TextStyle(
+          color: _textMain, fontWeight: FontWeight.bold, fontSize: 18),
+      bodyLarge: TextStyle(color: _textMain, fontSize: 15),
+      bodyMedium: TextStyle(color: _textMuted, fontSize: 13),
+    );
+
+    return ThemeData(
+      brightness: Brightness.dark,
+      fontFamily: _fontFamily,
+    ).copyWith(
       scaffoldBackgroundColor: _backgroundColor,
       cardColor: _cardColor,
 
@@ -25,48 +37,58 @@ class AppTheme {
         secondary: _purpleSecondary,
         surface: _cardColor,
         error: Colors.redAccent,
-        onSurface: _textMain, 
-        onSurfaceVariant: _textMuted, 
-        onPrimary: _textOnPrimary, 
+        onSurface: _textMain,
+        onSurfaceVariant: _textMuted,
+        onPrimary: _textOnPrimary,
       ),
 
-      // 💡 MODIFICAT AICI: Pachetul GoogleFonts preia stilurile tale și le injectează fontul Inter!
-      textTheme: GoogleFonts.interTextTheme(
-        const TextTheme(
-          headlineMedium: TextStyle(color: _textMain, fontWeight: FontWeight.bold),
-          titleLarge: TextStyle(color: _textMain, fontWeight: FontWeight.bold, fontSize: 18),
-          bodyLarge: TextStyle(color: _textMain, fontSize: 15),
-          bodyMedium: TextStyle(color: _textMuted, fontSize: 13),
-        ),
-      ),
+      // 💡 2. MAGIA REPARĂRII: Folosim .apply pe TextTheme-ul implicit al temei dark.
+      // Asta asigură că absolut toate stilurile interne (labelLarge pentru butoane, display, etc.)
+      // primesc fontul tău, nu doar cele 4 pe care le-ai definit manual.
+      textTheme: ThemeData.dark().textTheme.merge(baseTextTheme).apply(
+            fontFamily: _fontFamily,
+            displayColor: _textMain,
+            bodyColor: _textMain,
+          ),
 
-      // 💡 PENTRU APPBAR: Ca să aibă și titlul de sus tot fontul Inter, aplicăm Inter direct pe TextStyle-ul lui
-      appBarTheme: AppBarTheme(
+      appBarTheme: const AppBarTheme(
         backgroundColor: _backgroundColor,
         elevation: 0,
         centerTitle: true,
-        titleTextStyle: GoogleFonts.inter(
-          textStyle: const TextStyle(
-            color: _textMain,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
+        titleTextStyle: TextStyle(
+          color: _textMain,
+          fontSize: 20,
+          fontWeight: FontWeight.bold,
+          fontFamily: _fontFamily, // Sigur rămâne pe AppBar
         ),
-        iconTheme: const IconThemeData(color: _textMain),
+        iconTheme: IconThemeData(color: _textMain),
       ),
 
-      // 💡 PENTRU BUTOANE ELEVATED: Aplicăm Inter și pe textul din butoane ca să fie totul unitar
+      // 💡 3. Ne asigurăm că și butoanele mari (Elevated) ascultă de temă
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: _purplePrimary,
-          foregroundColor: _textOnPrimary, 
+          foregroundColor: _textOnPrimary,
           elevation: 2,
-          textStyle: GoogleFonts.inter(
-            textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+          textStyle: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 15,
+            fontFamily: _fontFamily, // Forțat direct pe textul butonului
           ),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
         ),
+      ),
+
+      // 💡 4. Forțăm fontul și în ferestrele pop-up / dialoguri de confirmare (dacă ai)
+      dialogTheme: const DialogThemeData(
+        titleTextStyle: TextStyle(
+            fontFamily: _fontFamily,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: _textMain),
+        contentTextStyle: TextStyle(fontFamily: _fontFamily, color: _textMuted),
       ),
 
       cardTheme: CardThemeData(
@@ -83,6 +105,9 @@ class AppTheme {
       ),
 
       inputDecorationTheme: InputDecorationTheme(
+        // Forțăm fontul Oswald și în etichetele sau textele ajutătoare din Inputs
+        labelStyle: const TextStyle(fontFamily: _fontFamily),
+        hintStyle: const TextStyle(fontFamily: _fontFamily),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
           borderSide: BorderSide(color: _purplePrimary.withOpacity(0.4)),

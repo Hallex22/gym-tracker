@@ -219,6 +219,7 @@ class _CalendarPageState extends State<CalendarPage> {
   Widget _buildMonthCalendar(ThemeData theme) {
     return TableCalendar(
       key: const ValueKey('month_view'),
+      startingDayOfWeek: StartingDayOfWeek.monday,
       firstDay: DateTime.utc(2020, 1, 1),
       lastDay: DateTime.utc(2030, 12, 31),
       focusedDay: _focusedDay,
@@ -274,17 +275,23 @@ class _CalendarPageState extends State<CalendarPage> {
       key: const ValueKey('year_view_vertical'),
       padding: const EdgeInsets.all(12),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3, // 3 luni pe rând
-        crossAxisSpacing: 8, // Distanța orizontală între luni
-        mainAxisSpacing: 12, // Distanța verticală între rândurile de luni
-        childAspectRatio:
-            0.72, // 💡 MODIFICAT: Am scăzut raportul ca să oferim mai mult spațiu pe verticală în interiorul lunii
+        crossAxisCount: 3,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 12,
+        childAspectRatio: 0.72,
       ),
       itemCount: 12,
       itemBuilder: (context, monthIndex) {
         final month = monthIndex + 1;
         final daysInMonth = DateTime(currentYear, month + 1, 0).day;
         final monthName = _getMonthName(month);
+
+        // 💡 REPARAT PENTRU ALINIERE: Aflăm în ce zi a săptămânii începe luna curentă
+        // DateTime.weekday returnează 1 pentru Luni, 7 pentru Duminică.
+        final firstDayWeekday = DateTime(currentYear, month, 1).weekday;
+
+        // Calculăm câte căsuțe goale („padding”) punem înainte de ziua de 1 a lunii
+        final int emptySpacesBefore = firstDayWeekday - 1;
 
         return Column(
           children: [
@@ -300,14 +307,20 @@ class _CalendarPageState extends State<CalendarPage> {
               child: GridView.builder(
                 physics: const NeverScrollableScrollPhysics(),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount:
-                      7, // 💡 REPARAT: Schimbat de la 4 la 7 coloane (zilele săptămânii)
+                  crossAxisCount: 7, // Cele 7 zile (Luni -> Duminică)
                   crossAxisSpacing: 2,
                   mainAxisSpacing: 2,
                 ),
-                itemCount: daysInMonth,
-                itemBuilder: (context, dayIndex) {
-                  final day = dayIndex + 1;
+                // Adăugăm spațiile goale la numărul total de itemi din grilă
+                itemCount: daysInMonth + emptySpacesBefore,
+                itemBuilder: (context, index) {
+                  // Dacă indexul este mai mic decât spațiile goale necesare, returnăm o căsuță invizibilă
+                  if (index < emptySpacesBefore) {
+                    return const SizedBox.shrink();
+                  }
+
+                  // Calculăm ziua reală a lunii
+                  final day = index - emptySpacesBefore + 1;
                   final currentCheckDay = DateTime(currentYear, month, day);
 
                   final workouts = _getWorkoutsForDay(currentCheckDay);

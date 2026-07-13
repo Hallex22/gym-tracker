@@ -28,28 +28,23 @@ class Routine {
   // METODE SHARE CODE (IMPROVED: Acum salvează și numărul de seturi compact!)
   // -----------------------------------------------------------------------
   String toShareCode() {
-    // În loc de doar nume, salvăm perechi compacte de tipul: {"n": "Nume", "s": 4}
+    // Mapăm exercițiile în perechi ultra-compacte: ID-ul original și numărul de seturi
     final List<Map<String, dynamic>> minimalExercises = exercises.map((e) {
-      // Căutăm numele exercițiului în exercisesBox pe baza ID-ului pentru export
-      final rawExercise = exercisesBox.get(e.exerciseId);
-      String currentName = 'Unknown Exercise';
-      if (rawExercise != null) {
-        currentName = rawExercise is Map
-            ? (rawExercise['name'] ?? 'Unknown')
-            : rawExercise.name;
-      }
       return {
-        'n': currentName,
-        's': e.targetSetsCount,
+        'id': e
+            .exerciseId, // 💡 Salvăm ID-ul/Cheia unică a exercițiului pentru o corelare perfectă la import
+        's': e.targetSetsCount, // Numărul de seturi țintă
       };
     }).toList();
 
+    // Structura finală compactă a rutinei
     final minimalMap = {
       't': title,
       'd': description,
       'e': minimalExercises,
     };
 
+    // Transformăm în JSON -> Bytes -> Base64 string
     final jsonString = jsonEncode(minimalMap);
     final bytes = utf8.encode(jsonString);
     return base64.encode(bytes);
@@ -69,20 +64,13 @@ class Routine {
 
       for (var item in sharedExercises) {
         final exerciseData = item as Map;
-        final String name = exerciseData['n']?.toString() ?? 'Unknown';
+        final dynamic exerciseId = exerciseData['id'];
         final int sets = exerciseData['s'] as int? ?? 3;
 
-        // Încercăm să găsim ID-ul exercițiului local în funcție de nume
-        int localId = 100; // ID de fallback secundar
-        final rawExercise = exercisesBox.get(name);
-
-        if (rawExercise != null) {
-          localId =
-              rawExercise is Map ? (rawExercise['id'] ?? 100) : rawExercise.id;
-        }
+        if (exerciseId == null) continue;
 
         reconstructedExercises.add(RoutineExercise(
-          exerciseId: localId,
+          exerciseId: exerciseId,
           targetSetsCount: sets,
         ));
       }
@@ -93,7 +81,7 @@ class Routine {
         exercises: reconstructedExercises,
       );
     } catch (e) {
-      return null; // Cod corupt sau invalid
+      return null;
     }
   }
 }

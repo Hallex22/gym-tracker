@@ -8,7 +8,6 @@ import 'package:path_provider/path_provider.dart';
 import 'enums/enums.dart';
 import 'models/models.dart';
 import 'navigation/main_navigation_hub.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 // Box-urile globale pe care le importăm în celelalte pagini
 late Box exercisesBox;

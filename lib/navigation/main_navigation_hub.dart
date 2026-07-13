@@ -42,6 +42,8 @@ class _MainNavigationHubState extends State<MainNavigationHub> {
           },
           selectedItemColor: Theme.of(context).colorScheme.primary,
           unselectedItemColor: Theme.of(context).colorScheme.onSurfaceVariant,
+          selectedLabelStyle: TextStyle(fontWeight: FontWeight.w500),
+
           showUnselectedLabels: true,
           type: BottomNavigationBarType.fixed,
           elevation: 0,

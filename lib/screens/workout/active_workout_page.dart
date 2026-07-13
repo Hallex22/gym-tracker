@@ -27,8 +27,6 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
 
   // 🔧 Cache exercitiu-complet indexat dupa id (Exercise.id -> Exercise).
   // Construit o singura data, nu mai depinde de schema de chei din Hive
-  // (nu presupunem ca id-ul e chiar cheia din exercisesBox) si evita
-  // re-parsarea intregului box la fiecare tick al timerului live.
   late Map<int, Exercise> _exerciseCache;
 
   @override
@@ -86,14 +84,9 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
       });
     } else {
       _sessionStart = DateTime.now();
-      // 🔧 REFACTOR: widget.routine.exercises este acum List<RoutineExercise>
-      // (are .exerciseId si .targetSetsCount), nu mai e List<Exercise> cu .id.
       for (var routineExercise in widget.routine.exercises) {
         final exerciseId = routineExercise.exerciseId;
         final prevLog = _getPreviousLogForExercise(exerciseId);
-
-        // Folosim targetSetsCount din rutina ca sa generam automat cate
-        // seturi are exercitiul, in loc de un singur set gol implicit.
         final targetSets = routineExercise.targetSetsCount > 0
             ? routineExercise.targetSetsCount
             : 1;
@@ -144,13 +137,8 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
     await logsBox.put(_currentLogKey, currentLog.toMap());
   }
 
-  // 🔧 FIX: metoda folosea `_workoutStartTime` și `_showTopSuccessToast`, care nu
-  // existau in clasa (ar fi picat compilarea). Corectata sa foloseasca
-  // `_sessionStart` (variabila reala) si sa persiste imediat noul start time.
   void _adjustLiveWorkoutDuration(int targetMinutes) {
     setState(() {
-      // Schema: StartTime devine (Acum minus minutele dorite), astfel
-      // cronometrul calculeaza automat durata corecta la urmatorul tick.
       _sessionStart = DateTime.now().subtract(Duration(minutes: targetMinutes));
     });
 
@@ -164,8 +152,6 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
     );
   }
 
-  // 🆕 Modala pentru editarea manuala a duratei (ex: utilizatorul a uitat
-  // sa apese Start la timp). Se deschide la tap pe statul "Duration".
   Future<void> _showEditWorkoutDurationDialog() async {
     final currentMinutes = DateTime.now().difference(_sessionStart).inMinutes;
     final controller = TextEditingController(text: currentMinutes.toString());
@@ -267,7 +253,7 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
       'durationMin': difference.inMinutes,
       'exercisesCount': _activeExercises.length,
       'volume': currentSnapshotLog.totalVolume,
-      'setsCount': currentSnapshotLog.totalSetsCount
+      'setsCount': currentSnapshotLog.completedSetsCount
     };
   }
 
