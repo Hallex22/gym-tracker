@@ -126,8 +126,8 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
             onPressed: () => Navigator.pop(context, false),
             child: Text(
               'Cancel',
-              style:
-                  TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+              style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
           ),
           TextButton(
@@ -191,11 +191,12 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
                   children: [
                     TextFormField(
                       initialValue: _title,
-                      decoration:
-                          inputDecorationTheme.copyWith(labelText: 'Routine Title'),
-                      validator: (value) => value == null || value.trim().isEmpty
-                          ? 'Title is required'
-                          : null,
+                      decoration: inputDecorationTheme.copyWith(
+                          labelText: 'Routine Title'),
+                      validator: (value) =>
+                          value == null || value.trim().isEmpty
+                              ? 'Title is required'
+                              : null,
                       onSaved: (value) => _title = value!.trim(),
                     ),
                     const SizedBox(height: 12),
@@ -212,8 +213,8 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
               // --- STRUCTURA RUTINEI (AFIȘARE DINAMICĂ CU NUMĂR DE SETURI) ---
               if (_selectedRoutineExercises.isNotEmpty) ...[
                 Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16.0, vertical: 4.0),
                   child: Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
@@ -227,7 +228,8 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
                 ),
                 Expanded(
                   child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    margin:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                     child: ReorderableListView.builder(
                       itemCount: _selectedRoutineExercises.length,
                       // 🔧 FIX: parametrul corect e `onReorder`, nu `onReorderItem`
@@ -250,12 +252,14 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
                         String extraInfo = 'CORE • BODYWEIGHT';
 
                         if (rawEx != null) {
-                          final exInstance =
-                              rawEx is Map ? Exercise.fromMap(rawEx) : rawEx as Exercise;
+                          final exInstance = rawEx is Map
+                              ? Exercise.fromMap(rawEx)
+                              : rawEx as Exercise;
                           exerciseName = exInstance.name;
-                          final primaryMuscle = exInstance.primaryMuscles.isNotEmpty
-                              ? exInstance.primaryMuscles.first.group
-                              : null;
+                          final primaryMuscle =
+                              exInstance.primaryMuscles.isNotEmpty
+                                  ? exInstance.primaryMuscles.first.group
+                                  : null;
                           final muscleName = primaryMuscle != null
                               ? primaryMuscle.name.toUpperCase()
                               : 'CORE';
@@ -274,8 +278,8 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
                           margin: const EdgeInsets.symmetric(vertical: 4),
                           elevation: 0,
                           child: Padding(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 8),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -290,7 +294,7 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
                                         exerciseName,
                                         style: TextStyle(
                                             fontWeight: FontWeight.bold,
-                                            fontSize: 15,
+                                            fontSize: 14,
                                             color: theme.colorScheme.onSurface),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
@@ -306,7 +310,7 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 6),
+                                const SizedBox(height: 4),
                                 // --- Rand 2: muschi/echipament + contor seturi ---
                                 Row(
                                   children: [
@@ -316,15 +320,16 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
                                       child: Text(
                                         extraInfo,
                                         style: TextStyle(
-                                            fontSize: 11,
-                                            color:
-                                                theme.colorScheme.onSurfaceVariant),
+                                            fontSize: 10,
+                                            color: theme
+                                                .colorScheme.onSurfaceVariant),
                                       ),
                                     ),
                                     IconButton(
                                       icon: Icon(Icons.remove_circle_outline,
                                           size: 18,
-                                          color: theme.colorScheme.onSurfaceVariant),
+                                          color: theme
+                                              .colorScheme.onSurfaceVariant),
                                       padding: EdgeInsets.zero,
                                       constraints: const BoxConstraints(),
                                       onPressed: () {
@@ -344,12 +349,13 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
                                         style: TextStyle(
                                             fontWeight: FontWeight.bold,
                                             color: theme.colorScheme.primary,
-                                            fontSize: 13),
+                                            fontSize: 12),
                                       ),
                                     ),
                                     IconButton(
                                       icon: Icon(Icons.add_circle_outline,
-                                          size: 18, color: theme.colorScheme.primary),
+                                          size: 18,
+                                          color: theme.colorScheme.primary),
                                       padding: EdgeInsets.zero,
                                       constraints: const BoxConstraints(),
                                       onPressed: () {
@@ -374,8 +380,9 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
                     child: Text(
                       'No exercises added yet.\nTap below to start building! 🛠️',
                       textAlign: TextAlign.center,
-                      style:
-                          TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 15),
+                      style: TextStyle(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          fontSize: 15),
                     ),
                   ),
                 ),
@@ -391,7 +398,9 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
                     onPressed: () async {
                       // Pasăm ID-urile deja selectate pentru a le marca/bloca în ecranul următor
                       final List<int> currentActiveIds =
-                          _selectedRoutineExercises.map((e) => e.exerciseId).toList();
+                          _selectedRoutineExercises
+                              .map((e) => e.exerciseId)
+                              .toList();
 
                       final List<Exercise>? result =
                           await Navigator.push<List<Exercise>>(
@@ -409,7 +418,8 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
                           for (var newEx in result) {
                             _selectedRoutineExercises.add(RoutineExercise(
                               exerciseId: newEx.id,
-                              targetSetsCount: 3, // Încep direct cu default de 3 seturi
+                              targetSetsCount:
+                                  3, // Încep direct cu default de 3 seturi
                             ));
                           }
                         });

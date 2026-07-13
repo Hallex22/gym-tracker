@@ -94,15 +94,20 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
 
         // Folosim targetSetsCount din rutina ca sa generam automat cate
         // seturi are exercitiul, in loc de un singur set gol implicit.
-        final targetSets =
-            routineExercise.targetSetsCount > 0
-                ? routineExercise.targetSetsCount
-                : 1;
+        final targetSets = routineExercise.targetSetsCount > 0
+            ? routineExercise.targetSetsCount
+            : 1;
 
         final initialSets = List<LoggedSet>.generate(targetSets, (index) {
-          if (prevLog != null && index < prevLog.sets.length) {
-            final prevSet = prevLog.sets[index];
-            return LoggedSet(weight: prevSet.weight, reps: prevSet.reps);
+          if (prevLog != null && prevLog.sets.isNotEmpty) {
+            if (index < prevLog.sets.length) {
+              final prevSet = prevLog.sets[index];
+              return LoggedSet(weight: prevSet.weight, reps: prevSet.reps);
+            } else {
+              final lastSetFromPast = prevLog.sets.last;
+              return LoggedSet(
+                  weight: lastSetFromPast.weight, reps: lastSetFromPast.reps);
+            }
           }
           return const LoggedSet(weight: 0.0, reps: 0);
         });
@@ -146,8 +151,7 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
     setState(() {
       // Schema: StartTime devine (Acum minus minutele dorite), astfel
       // cronometrul calculeaza automat durata corecta la urmatorul tick.
-      _sessionStart =
-          DateTime.now().subtract(Duration(minutes: targetMinutes));
+      _sessionStart = DateTime.now().subtract(Duration(minutes: targetMinutes));
     });
 
     _updateLiveProgress();
@@ -164,8 +168,7 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
   // sa apese Start la timp). Se deschide la tap pe statul "Duration".
   Future<void> _showEditWorkoutDurationDialog() async {
     final currentMinutes = DateTime.now().difference(_sessionStart).inMinutes;
-    final controller =
-        TextEditingController(text: currentMinutes.toString());
+    final controller = TextEditingController(text: currentMinutes.toString());
     final theme = Theme.of(context);
 
     final result = await showDialog<int>(
@@ -222,8 +225,7 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                 child: AppFilledButton(
                   label: 'Save',
                   onPressed: () {
-                    final parsedMinutes =
-                        int.tryParse(controller.text.trim());
+                    final parsedMinutes = int.tryParse(controller.text.trim());
                     Navigator.pop(context, parsedMinutes);
                   },
                 ),
@@ -652,133 +654,69 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                         ),
                       )
                     : ReorderableListView.builder(
-                  itemCount: _activeExercises.length,
-                  // 🔧 FIX: parametrul corect este `onReorder`, nu `onReorderItem`,
-                  // si trebuie ajustat newIndex cand se muta in jos in lista.
-                  onReorder: (oldIndex, newIndex) {
-                    setState(() {
-                      if (newIndex > oldIndex) newIndex -= 1;
-                      final item = _activeExercises.removeAt(oldIndex);
-                      _activeExercises.insert(newIndex, item);
-                    });
-                    _updateLiveProgress();
-                  },
-                  itemBuilder: (context, exIndex) {
-                    final exercise = _activeExercises[exIndex];
-                    final sets = exercise.sets;
+                        itemCount: _activeExercises.length,
+                        // 🔧 FIX: parametrul corect este `onReorder`, nu `onReorderItem`,
+                        // si trebuie ajustat newIndex cand se muta in jos in lista.
+                        onReorder: (oldIndex, newIndex) {
+                          setState(() {
+                            if (newIndex > oldIndex) newIndex -= 1;
+                            final item = _activeExercises.removeAt(oldIndex);
+                            _activeExercises.insert(newIndex, item);
+                          });
+                          _updateLiveProgress();
+                        },
+                        itemBuilder: (context, exIndex) {
+                          final exercise = _activeExercises[exIndex];
+                          final sets = exercise.sets;
 
-                    // 🔧 Reconstruim exercitiul original din cache, dupa id.
-                    final fullExercise = _resolveExercise(exercise.exerciseId);
-                    final coverImage = fullExercise?.coverImage;
+                          // 🔧 Reconstruim exercitiul original din cache, dupa id.
+                          final fullExercise =
+                              _resolveExercise(exercise.exerciseId);
+                          final coverImage = fullExercise?.coverImage;
 
-                    final isMissingData = fullExercise == null;
-                    final isImageEmpty =
-                        coverImage == null || coverImage.isEmpty;
+                          final isMissingData = fullExercise == null;
+                          final isImageEmpty =
+                              coverImage == null || coverImage.isEmpty;
 
-                    // 🔧 Nume afisat: fallback clar daca exercitiul nu mai exista
-                    // in exercisesBox (a fost sters/redenumit intre timp).
-                    final displayName = fullExercise?.name ??
-                        'Exercițiu necunoscut (ID: ${exercise.exerciseId})';
+                          // 🔧 Nume afisat: fallback clar daca exercitiul nu mai exista
+                          // in exercisesBox (a fost sters/redenumit intre timp).
+                          final displayName = fullExercise?.name ??
+                              'Exercițiu necunoscut (ID: ${exercise.exerciseId})';
 
-                    return Card(
-                      key:
-                          ValueKey('active_ex_${exercise.exerciseId}_$exIndex'),
-                      margin: const EdgeInsets.all(12),
-                      child: Padding(
-                        padding: const EdgeInsets.all(12.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Icon(Icons.drag_handle,
-                                    color: theme.colorScheme.onSurfaceVariant),
-                                const SizedBox(width: 8),
-                                if (!isMissingData && !isImageEmpty) ...[
-                                  CircleAvatar(
-                                    radius: 20,
-                                    backgroundColor: theme
-                                        .colorScheme.surfaceContainerHighest,
-                                    backgroundImage:
-                                        AssetImage('assets/$coverImage'),
-                                  ),
-                                  const SizedBox(width: 12),
-                                ],
-                                // 💡 Titlul este acum înfășurat în InkWell pentru a fi un buton de navigare către detalii
-                                Expanded(
-                                  child: InkWell(
-                                    onTap: () {
-                                      if (fullExercise != null) {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (context) =>
-                                                ExerciseDetailPage(
-                                                    exercise: fullExercise),
-                                          ),
-                                        );
-                                      } else {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
-                                          SnackBar(
-                                            content: Text(
-                                                'Eroare: Lipsesc detaliile pentru ID "${exercise.exerciseId}"! ⚠️'),
-                                            backgroundColor: Colors.redAccent,
-                                          ),
-                                        );
-                                      }
-                                    },
-                                    borderRadius: BorderRadius.circular(4),
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 4.0),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            displayName,
-                                            style: TextStyle(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.bold,
-                                                color: theme
-                                                    .colorScheme.onSurface),
-                                          ),
-                                          if (isMissingData || isImageEmpty)
-                                            Text(
-                                              isMissingData
-                                                  ? '[⚠️ Nu există în exercisesBox]'
-                                                  : '[⚠️ Imaginea este goală în DB]',
-                                              style: const TextStyle(
-                                                  fontSize: 11,
-                                                  color: Colors.redAccent,
-                                                  fontWeight: FontWeight.bold),
-                                            ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                // 💡 Înlocuit butoanele vechi cu un PopupMenuButton (cele 3 puncte verticale/orizontale)
-                                // 💡 Înlocuiește vechiul PopupMenuButton<String>(...) cu acest IconButton elegant:
-                                IconButton(
-                                  icon: Icon(Icons.more_vert,
-                                      color:
-                                          theme.colorScheme.onSurfaceVariant),
-                                  onPressed: () {
-                                    // Apelăm componenta noastră reutilizabilă
-                                    AppActionsSheet.show(
-                                      context: context,
-                                      title: displayName,
-                                      subtitle:
-                                          'Manage active exercise session',
-                                      actions: [
-                                        // 1. Opțiunea de vizualizare
-                                        SheetActionItem(
-                                          icon: Icons.info_outline,
-                                          label: 'View Exercise Details',
-                                          onPressed: () {
+                          final isBodyWeight =
+                              fullExercise?.equipment == Equipment.bodyweight;
+
+                          return Card(
+                            key: ValueKey(
+                                'active_ex_${exercise.exerciseId}_$exIndex'),
+                            margin: const EdgeInsets.all(12),
+                            child: Padding(
+                              padding: const EdgeInsets.all(12.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Icon(Icons.drag_handle,
+                                          color: theme
+                                              .colorScheme.onSurfaceVariant),
+                                      const SizedBox(width: 8),
+                                      if (!isMissingData && !isImageEmpty) ...[
+                                        CircleAvatar(
+                                          radius: 20,
+                                          backgroundColor: theme.colorScheme
+                                              .surfaceContainerHighest,
+                                          backgroundImage:
+                                              AssetImage('assets/$coverImage'),
+                                        ),
+                                        const SizedBox(width: 12),
+                                      ],
+                                      // Titlul înfășurat în InkWell pentru detalii
+                                      Expanded(
+                                        child: InkWell(
+                                          onTap: () {
                                             if (fullExercise != null) {
                                               Navigator.push(
                                                 context,
@@ -789,220 +727,359 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                                                               fullExercise),
                                                 ),
                                               );
+                                            } else {
+                                              ScaffoldMessenger.of(context)
+                                                  .showSnackBar(
+                                                SnackBar(
+                                                  content: Text(
+                                                      'Eroare: Lipsesc detaliile pentru ID "${exercise.exerciseId}"! ⚠️'),
+                                                  backgroundColor:
+                                                      Colors.redAccent,
+                                                ),
+                                              );
                                             }
                                           },
+                                          borderRadius:
+                                              BorderRadius.circular(4),
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                                vertical: 4.0),
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  displayName,
+                                                  style: TextStyle(
+                                                      fontSize: 16,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      color: theme.colorScheme
+                                                          .onSurface),
+                                                ),
+                                                if (isMissingData ||
+                                                    isImageEmpty)
+                                                  Text(
+                                                    isMissingData
+                                                        ? '[⚠️ Nu există în exercisesBox]'
+                                                        : '[⚠️ Imaginea este goală în DB]',
+                                                    style: const TextStyle(
+                                                        fontSize: 11,
+                                                        color: Colors.redAccent,
+                                                        fontWeight:
+                                                            FontWeight.bold),
+                                                  ),
+                                              ],
+                                            ),
+                                          ),
                                         ),
-                                        // 2. Opțiunea de ștergere CU MODALĂ DE CONFIRMARE
-                                        SheetActionItem(
-                                          icon: Icons.delete_outline,
-                                          label: 'Remove Exercise',
-                                          color: Colors.redAccent,
-                                          onPressed: () async {
-                                            // Deschidem dialogul de siguranță ca să nu mai pierdem date în puii mei
-                                            final bool? confirmDelete =
-                                                await showDialog<bool>(
-                                              context: context,
-                                              builder: (BuildContext context) =>
-                                                  AlertDialog(
-                                                title: const Text(
-                                                    'Remove Exercise? ⚠️'),
-                                                content: Text(
-                                                    'Are you sure you want to remove "$displayName" and all its completed sets from this workout?'),
-                                                actions: [
-                                                  TextButton(
-                                                    onPressed: () =>
-                                                        Navigator.pop(
-                                                            context, false),
-                                                    child: const Text('Cancel',
-                                                        style: TextStyle(
-                                                            color:
-                                                                Colors.grey)),
-                                                  ),
-                                                  ElevatedButton(
-                                                    style: ElevatedButton
-                                                        .styleFrom(
-                                                            backgroundColor:
-                                                                Colors
-                                                                    .redAccent),
-                                                    onPressed: () =>
-                                                        Navigator.pop(
-                                                            context, true),
-                                                    child: const Text('Remove',
-                                                        style: TextStyle(
-                                                            color:
-                                                                Colors.white)),
-                                                  ),
-                                                ],
+                                      ),
+                                      // Meniul de opțiuni rapid (AppActionsSheet)
+                                      IconButton(
+                                        icon: Icon(Icons.more_vert,
+                                            color: theme
+                                                .colorScheme.onSurfaceVariant),
+                                        onPressed: () {
+                                          AppActionsSheet.show(
+                                            context: context,
+                                            title: displayName,
+                                            subtitle:
+                                                'Manage active exercise session',
+                                            actions: [
+                                              SheetActionItem(
+                                                icon: Icons.info_outline,
+                                                label: 'View Exercise Details',
+                                                onPressed: () {
+                                                  if (fullExercise != null) {
+                                                    Navigator.push(
+                                                      context,
+                                                      MaterialPageRoute(
+                                                        builder: (context) =>
+                                                            ExerciseDetailPage(
+                                                                exercise:
+                                                                    fullExercise),
+                                                      ),
+                                                    );
+                                                  }
+                                                },
                                               ),
-                                            );
+                                              SheetActionItem(
+                                                icon: Icons.delete_outline,
+                                                label: 'Remove Exercise',
+                                                color: Colors.redAccent,
+                                                onPressed: () async {
+                                                  final bool? confirmDelete =
+                                                      await showDialog<bool>(
+                                                    context: context,
+                                                    builder: (BuildContext
+                                                            context) =>
+                                                        AlertDialog(
+                                                      title: const Text(
+                                                          'Remove Exercise? ⚠️'),
+                                                      content: Text(
+                                                          'Are you sure you want to remove "$displayName" and all its completed sets from this workout?'),
+                                                      actions: [
+                                                        TextButton(
+                                                          onPressed: () =>
+                                                              Navigator.pop(
+                                                                  context,
+                                                                  false),
+                                                          child: const Text(
+                                                              'Cancel',
+                                                              style: TextStyle(
+                                                                  color: Colors
+                                                                      .grey)),
+                                                        ),
+                                                        ElevatedButton(
+                                                          style: ElevatedButton
+                                                              .styleFrom(
+                                                                  backgroundColor:
+                                                                      Colors
+                                                                          .redAccent),
+                                                          onPressed: () =>
+                                                              Navigator.pop(
+                                                                  context,
+                                                                  true),
+                                                          child: const Text(
+                                                              'Remove',
+                                                              style: TextStyle(
+                                                                  color: Colors
+                                                                      .white)),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  );
 
-                                            // Dacă utilizatorul a confirmat, abia atunci îl scoatem din listă
-                                            if (confirmDelete == true) {
-                                              setState(() {
-                                                _activeExercises
-                                                    .removeAt(exIndex);
-                                              });
-                                              _updateLiveProgress();
-                                            }
+                                                  if (confirmDelete == true) {
+                                                    setState(() {
+                                                      _activeExercises
+                                                          .removeAt(exIndex);
+                                                    });
+                                                    _updateLiveProgress();
+                                                  }
+                                                },
+                                              ),
+                                            ],
+                                          );
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                  Divider(
+                                      color: theme.colorScheme.primary
+                                          .withOpacity(0.2)),
+
+                                  // --- HEADER COLOANE ---
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 4.0),
+                                    child: Row(
+                                      children: [
+                                        SizedBox(
+                                            width: 50,
+                                            child: Text('Set',
+                                                style: TextStyle(
+                                                    fontWeight: FontWeight.w600,
+                                                    color: theme.colorScheme
+                                                        .onSurfaceVariant))),
+                                        Expanded(
+                                            child: Text(
+                                                isBodyWeight
+                                                    ? 'Weight'
+                                                    : 'Weight (kg)',
+                                                style: TextStyle(
+                                                    fontWeight: FontWeight.w600,
+                                                    color: theme.colorScheme
+                                                        .onSurfaceVariant),
+                                                textAlign: TextAlign.center)),
+                                        Expanded(
+                                            child: Text('Reps',
+                                                style: TextStyle(
+                                                    fontWeight: FontWeight.w600,
+                                                    color: theme.colorScheme
+                                                        .onSurfaceVariant),
+                                                textAlign: TextAlign.center)),
+                                      ],
+                                    ),
+                                  ),
+
+                                  // --- RÂNDURILE CU INPUTURILE DE SETURI ---
+                                  ...sets.asMap().entries.map((entry) {
+                                    int setIndex = entry.key;
+                                    final set = entry.value;
+
+                                    return Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 4.0),
+                                      child: Row(
+                                        children: [
+                                          SizedBox(
+                                              width: 50,
+                                              child: Text('${setIndex + 1}',
+                                                  style: const TextStyle(
+                                                      fontSize: 16,
+                                                      fontWeight:
+                                                          FontWeight.bold))),
+                                          Expanded(
+                                            child: Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 8.0),
+                                              child: isBodyWeight
+                                                  ? Container(
+                                                      alignment:
+                                                          Alignment.center,
+                                                      padding: const EdgeInsets
+                                                          .symmetric(
+                                                          vertical: 10),
+                                                      decoration: BoxDecoration(
+                                                        color: theme.colorScheme
+                                                            .surfaceContainerHighest
+                                                            .withOpacity(0.5),
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(4),
+                                                        border: Border.all(
+                                                            color: theme
+                                                                .colorScheme
+                                                                .outlineVariant),
+                                                      ),
+                                                      child: Text(
+                                                        'BW 🧍',
+                                                        style: TextStyle(
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          color: theme
+                                                              .colorScheme
+                                                              .onSurfaceVariant,
+                                                          fontSize: 14,
+                                                        ),
+                                                      ),
+                                                    )
+                                                  : TextFormField(
+                                                      initialValue:
+                                                          set.weight == 0.0
+                                                              ? ''
+                                                              : set.weight
+                                                                  .toString(),
+                                                      keyboardType:
+                                                          const TextInputType
+                                                              .numberWithOptions(
+                                                              decimal: true),
+                                                      decoration: const InputDecoration(
+                                                          border:
+                                                              OutlineInputBorder(),
+                                                          contentPadding:
+                                                              EdgeInsets
+                                                                  .symmetric(
+                                                                      horizontal:
+                                                                          8,
+                                                                      vertical:
+                                                                          4),
+                                                          hintText: '0'),
+                                                      onChanged: (value) {
+                                                        final newWeight =
+                                                            double.tryParse(
+                                                                    value) ??
+                                                                0.0;
+                                                        exercise.sets[
+                                                                setIndex] =
+                                                            LoggedSet(
+                                                                weight:
+                                                                    newWeight,
+                                                                reps: set.reps);
+                                                        _updateLiveProgress();
+                                                      },
+                                                    ),
+                                            ),
+                                          ),
+                                          Expanded(
+                                            child: Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 8.0),
+                                              child: TextFormField(
+                                                initialValue: set.reps == 0
+                                                    ? ''
+                                                    : set.reps.toString(),
+                                                keyboardType:
+                                                    TextInputType.number,
+                                                decoration:
+                                                    const InputDecoration(
+                                                        border:
+                                                            OutlineInputBorder(),
+                                                        contentPadding:
+                                                            EdgeInsets
+                                                                .symmetric(
+                                                                    horizontal:
+                                                                        8,
+                                                                    vertical:
+                                                                        4),
+                                                        hintText: '0'),
+                                                onChanged: (value) {
+                                                  final newReps =
+                                                      int.tryParse(value) ?? 0;
+                                                  exercise.sets[setIndex] =
+                                                      LoggedSet(
+                                                          weight: set.weight,
+                                                          reps: newReps);
+                                                  _updateLiveProgress();
+                                                },
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }),
+                                  const SizedBox(height: 10),
+
+                                  // --- ACȚIUNI SET (ADD/REMOVE) ---
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: AppGhostButton(
+                                          label: 'Add Set',
+                                          icon: Icons.add,
+                                          onPressed: () {
+                                            setState(() {
+                                              double lastWeight =
+                                                  sets.isNotEmpty
+                                                      ? sets.last.weight
+                                                      : 0.0;
+                                              int lastReps = sets.isNotEmpty
+                                                  ? sets.last.reps
+                                                  : 0;
+                                              sets.add(LoggedSet(
+                                                  weight: lastWeight,
+                                                  reps: lastReps));
+                                            });
+                                            _updateLiveProgress();
                                           },
                                         ),
-                                      ],
-                                    );
-                                  },
-                                ),
-                              ],
-                            ),
-                            Divider(
-                                color:
-                                    theme.colorScheme.primary.withOpacity(0.2)),
-                            Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 4.0),
-                              child: Row(
-                                children: [
-                                  // 💡 Corectat aici: FontWeight.w600 în loc de FontWeight(600)
-                                  SizedBox(
-                                      width: 50,
-                                      child: Text('Set',
-                                          style: TextStyle(
-                                              fontWeight: FontWeight.w600,
-                                              color: theme.colorScheme
-                                                  .onSurfaceVariant))),
-                                  Expanded(
-                                      child: Text('Weight (kg)',
-                                          style: TextStyle(
-                                              fontWeight: FontWeight.w600,
-                                              color: theme.colorScheme
-                                                  .onSurfaceVariant),
-                                          textAlign: TextAlign.center)),
-                                  Expanded(
-                                      child: Text('Reps',
-                                          style: TextStyle(
-                                              fontWeight: FontWeight.w600,
-                                              color: theme.colorScheme
-                                                  .onSurfaceVariant),
-                                          textAlign: TextAlign.center)),
+                                      ),
+                                      if (sets.length > 1)
+                                        TextButton(
+                                          onPressed: () {
+                                            setState(() {
+                                              sets.removeLast();
+                                            });
+                                            _updateLiveProgress();
+                                          },
+                                          child: const Text('Remove Last Set',
+                                              style: TextStyle(
+                                                  color: Colors.redAccent)),
+                                        )
+                                    ],
+                                  )
                                 ],
                               ),
                             ),
-                            ...sets.asMap().entries.map((entry) {
-                              int setIndex = entry.key;
-                              final set = entry.value;
-
-                              return Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 4.0),
-                                child: Row(
-                                  children: [
-                                    SizedBox(
-                                        width: 50,
-                                        child: Text('${setIndex + 1}',
-                                            style: const TextStyle(
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.bold))),
-                                    Expanded(
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 8.0),
-                                        child: TextFormField(
-                                          initialValue: set.weight == 0.0
-                                              ? ''
-                                              : set.weight.toString(),
-                                          keyboardType: const TextInputType
-                                              .numberWithOptions(decimal: true),
-                                          decoration: const InputDecoration(
-                                              border: OutlineInputBorder(),
-                                              contentPadding:
-                                                  EdgeInsets.symmetric(
-                                                      horizontal: 8,
-                                                      vertical: 4),
-                                              hintText: '0'),
-                                          onChanged: (value) {
-                                            final newWeight =
-                                                double.tryParse(value) ?? 0.0;
-                                            exercise.sets[setIndex] = LoggedSet(
-                                                weight: newWeight,
-                                                reps: set.reps);
-                                            _updateLiveProgress();
-                                          },
-                                        ),
-                                      ),
-                                    ),
-                                    Expanded(
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 8.0),
-                                        child: TextFormField(
-                                          initialValue: set.reps == 0
-                                              ? ''
-                                              : set.reps.toString(),
-                                          keyboardType: TextInputType.number,
-                                          decoration: const InputDecoration(
-                                              border: OutlineInputBorder(),
-                                              contentPadding:
-                                                  EdgeInsets.symmetric(
-                                                      horizontal: 8,
-                                                      vertical: 4),
-                                              hintText: '0'),
-                                          onChanged: (value) {
-                                            final newReps =
-                                                int.tryParse(value) ?? 0;
-                                            exercise.sets[setIndex] = LoggedSet(
-                                                weight: set.weight,
-                                                reps: newReps);
-                                            _updateLiveProgress();
-                                          },
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }),
-                            const SizedBox(height: 10),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Expanded(
-                                  child: AppGhostButton(
-                                    label: 'Add Set',
-                                    icon: Icons.add,
-                                    onPressed: () {
-                                      setState(() {
-                                        double lastWeight = sets.isNotEmpty
-                                            ? sets.last.weight
-                                            : 0.0;
-                                        int lastReps = sets.isNotEmpty
-                                            ? sets.last.reps
-                                            : 0;
-                                        sets.add(LoggedSet(
-                                            weight: lastWeight,
-                                            reps: lastReps));
-                                      });
-                                      _updateLiveProgress();
-                                    },
-                                  ),
-                                ),
-                                if (sets.length > 1)
-                                  TextButton(
-                                    onPressed: () {
-                                      setState(() {
-                                        sets.removeLast();
-                                      });
-                                      _updateLiveProgress();
-                                    },
-                                    child: const Text('Remove Last Set',
-                                        style:
-                                            TextStyle(color: Colors.redAccent)),
-                                  )
-                              ],
-                            )
-                          ],
-                        ),
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
               ),
             ],
           ),

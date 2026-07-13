@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
   static const Color _backgroundColor = Color(0xFF0F0E17);
@@ -9,12 +10,9 @@ class AppTheme {
   static const Color _purpleSecondary = Color(0xFFE0AAFF);
 
   // --- CULORILE DE TEXT PROPUSE DE TINE ---
-  static const Color _textMain =
-      Color(0xFFFFFFFE); // Alb strălucitor (Text principal)
-  static const Color _textMuted =
-      Color(0xFF94A1B2); // Gri-albăstrui discret (Text secundar / muted)
-  static const Color _textOnPrimary =
-      Color(0xFFFFFFFF); // Textul care stă peste movul aprins
+  static const Color _textMain = Color(0xFFFFFFFE); // Alb strălucitor
+  static const Color _textMuted = Color(0xFF94A1B2); // Gri-albăstrui discret
+  static const Color _textOnPrimary = Color(0xFFFFFFFF); // Textul de peste mov
 
   static ThemeData get darkTheme {
     return ThemeData.dark().copyWith(
@@ -27,48 +25,46 @@ class AppTheme {
         secondary: _purpleSecondary,
         surface: _cardColor,
         error: Colors.redAccent,
-
-        // Mapăm culorile de text în schema de culori standard Flutter:
-        onSurface: _textMain, // Textul implicit de pe ecran/carduri
-        onSurfaceVariant:
-            _textMuted, // Varianta "muted" pentru detalii/subtitluri
-        onPrimary: _textOnPrimary, // Textul de peste butoanele primary (mov)
+        onSurface: _textMain, 
+        onSurfaceVariant: _textMuted, 
+        onPrimary: _textOnPrimary, 
       ),
 
-      // CONFIGURAREA TEXTULUI GLOBAL (Scapi de TextStyle manual în pagini!)
-      textTheme: const TextTheme(
-        // Pentru Titluri mari
-        headlineMedium:
-            TextStyle(color: _textMain, fontWeight: FontWeight.bold),
-        // Pentru titluri de Carduri sau secțiuni
-        titleLarge: TextStyle(
-            color: _textMain, fontWeight: FontWeight.bold, fontSize: 18),
-        // Pentru text normal (Main Text)
-        bodyLarge: TextStyle(color: _textMain, fontSize: 15),
-        // Pentru textul discret (Text Muted)
-        bodyMedium: TextStyle(color: _textMuted, fontSize: 13),
+      // 💡 MODIFICAT AICI: Pachetul GoogleFonts preia stilurile tale și le injectează fontul Inter!
+      textTheme: GoogleFonts.interTextTheme(
+        const TextTheme(
+          headlineMedium: TextStyle(color: _textMain, fontWeight: FontWeight.bold),
+          titleLarge: TextStyle(color: _textMain, fontWeight: FontWeight.bold, fontSize: 18),
+          bodyLarge: TextStyle(color: _textMain, fontSize: 15),
+          bodyMedium: TextStyle(color: _textMuted, fontSize: 13),
+        ),
       ),
 
-      appBarTheme: const AppBarTheme(
+      // 💡 PENTRU APPBAR: Ca să aibă și titlul de sus tot fontul Inter, aplicăm Inter direct pe TextStyle-ul lui
+      appBarTheme: AppBarTheme(
         backgroundColor: _backgroundColor,
         elevation: 0,
         centerTitle: true,
-        titleTextStyle: TextStyle(
-          color: _textMain, // Folosește albul principal
-          fontSize: 20,
-          fontWeight: FontWeight.bold,
+        titleTextStyle: GoogleFonts.inter(
+          textStyle: const TextStyle(
+            color: _textMain,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
         ),
-        iconTheme: IconThemeData(color: _textMain),
+        iconTheme: const IconThemeData(color: _textMain),
       ),
 
+      // 💡 PENTRU BUTOANE ELEVATED: Aplicăm Inter și pe textul din butoane ca să fie totul unitar
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: _purplePrimary,
-          foregroundColor:
-              _textOnPrimary, // Textul de peste buton va fi alb pur
+          foregroundColor: _textOnPrimary, 
           elevation: 2,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          textStyle: GoogleFonts.inter(
+            textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
         ),
       ),

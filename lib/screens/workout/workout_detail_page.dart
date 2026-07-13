@@ -3,6 +3,7 @@ import 'package:gym_tracker/utils/date_utils.dart';
 import '../../main.dart';
 import '../../models/models.dart';
 import '../../widgets/app_actions_sheet.dart';
+import '../exercises/exercise_detail_page.dart'; // 💡 Import adăugat pentru detalii
 import 'workout_form_page.dart';
 
 class WorkoutDetailPage extends StatefulWidget {
@@ -21,7 +22,6 @@ class WorkoutDetailPage extends StatefulWidget {
 }
 
 class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
-  // Păstrăm o referință locală modificabilă pentru log-ul curent
   late WorkoutLog _currentLog;
 
   @override
@@ -30,7 +30,6 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
     _currentLog = widget.log;
   }
 
-  // --- REÎNCĂRCARE DATE DUPĂ EDITARE ---
   void _refreshLogData() {
     final updatedData = logsBox.get(widget.logKey);
     if (updatedData != null) {
@@ -40,22 +39,16 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
     }
   }
 
-  // --- DRAWER CU OPȚIUNI (MODAL BOTTOM SHEET) ---
   void _showOptionsDrawer(BuildContext context) {
-    final theme = Theme.of(context);
-
     AppActionsSheet.show(
       context: context,
       title: 'Workout Options ⚙️',
-      subtitle:
-          _currentLog.routineTitle, // Pasăm numele antrenamentului ca subtitlu
+      subtitle: _currentLog.routineTitle,
       actions: [
-        // Acțiunea 1: EDITARE
         SheetActionItem(
           icon: Icons.edit_outlined,
           label: 'Edit Workout Log',
           onPressed: () async {
-            // Navigăm către pagina de editare
             final bool? wasEdited = await Navigator.push<bool>(
               context,
               MaterialPageRoute(
@@ -66,27 +59,23 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
               ),
             );
 
-            // Dacă s-a salvat cu succes, împrospătăm datele pe ecran
             if (wasEdited == true) {
               _refreshLogData();
             }
           },
         ),
-
-        // Acțiunea 2: ȘTERGERE
         SheetActionItem(
           icon: Icons.delete_outline,
           label: 'Delete Workout',
           color: Colors.redAccent,
           onPressed: () {
-            _deleteWorkout(context); // Declanșăm dialogul securizat de ștergere
+            _deleteWorkout(context);
           },
         ),
       ],
     );
   }
 
-  // --- DIALOG CONFIRMARE ȘTERGERE (MODALĂ SECURIZATĂ) ---
   Future<void> _deleteWorkout(BuildContext context) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -112,7 +101,7 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
       await logsBox.delete(widget.logKey);
       if (!context.mounted) return;
 
-      Navigator.pop(context); // Închide pagina de detalii definitiv
+      Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Workout deleted successfully.')),
       );
@@ -122,14 +111,13 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
   @override
   Widget build(BuildContext context) {
     final formattedDate = formatDateNative(_currentLog.startTime);
+    final theme = Theme.of(context);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Workout Summary'),
-        centerTitle:
-            false, // Titlu aliniat la stânga pentru consistență premium
+        centerTitle: false,
         actions: [
-          // Butonul cu 3 puncte verticale solicitat
           IconButton(
             icon: const Icon(Icons.more_vert, size: 26),
             tooltip: 'Workout Options',
@@ -148,20 +136,18 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
               style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.onSurface),
+                  color: theme.colorScheme.onSurface),
             ),
             const SizedBox(height: 4),
             Row(
               children: [
                 Icon(Icons.calendar_today,
-                    size: 14,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant),
+                    size: 14, color: theme.colorScheme.onSurfaceVariant),
                 const SizedBox(width: 6),
                 Text(
                   formattedDate,
                   style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontSize: 14),
+                      color: theme.colorScheme.onSurfaceVariant, fontSize: 14),
                 ),
               ],
             ),
@@ -170,12 +156,11 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
             // --- PANOU STATISTICI RAPIDE ---
             Card(
               elevation: 0,
-              color: Theme.of(context).cardColor.withOpacity(0.6),
+              color: theme.cardColor.withOpacity(0.6),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
                 side: BorderSide(
-                    color:
-                        Theme.of(context).colorScheme.primary.withOpacity(0.2)),
+                    color: theme.colorScheme.primary.withOpacity(0.2)),
               ),
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
@@ -202,7 +187,7 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
               style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  color: theme.colorScheme.onSurfaceVariant),
             ),
             const SizedBox(height: 12),
 
@@ -220,15 +205,26 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: _currentLog.exercises.length,
                 itemBuilder: (context, exIndex) {
-                  final exercise = _currentLog.exercises[exIndex];
-                  final rawExerciseData = exercisesBox.get(exercise.exerciseId);
+                  final loggedExercise = _currentLog.exercises[exIndex];
+                  final rawExerciseData =
+                      exercisesBox.get(loggedExercise.exerciseId);
 
+                  Exercise? fullExercise;
                   String exerciseName = 'Unknown Exercise';
+                  String? coverImage;
+
                   if (rawExerciseData != null) {
-                    exerciseName = rawExerciseData is Map
-                        ? (rawExerciseData['name'] ?? 'Unknown Exercise')
-                        : (rawExerciseData.name ?? 'Unknown Exercise');
+                    if (rawExerciseData is Map) {
+                      fullExercise = Exercise.fromMap(rawExerciseData);
+                    } else {
+                      fullExercise = rawExerciseData as Exercise;
+                    }
+                    exerciseName = fullExercise.name;
+                    coverImage = fullExercise.coverImage;
                   }
+
+                  final isImageEmpty =
+                      coverImage == null || coverImage.trim().isEmpty;
 
                   return Card(
                     margin: const EdgeInsets.only(bottom: 14),
@@ -237,21 +233,73 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            exerciseName,
-                            style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Theme.of(context).colorScheme.onSurface),
+                          // 💡 ZONĂ INKWELL PENTRU DETALII EXERCIȚIU
+                          InkWell(
+                            borderRadius: BorderRadius.circular(8),
+                            onTap: () {
+                              if (fullExercise != null) {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => ExerciseDetailPage(
+                                        exercise: fullExercise!),
+                                  ),
+                                );
+                              }
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 4.0, horizontal: 2.0),
+                              child: Row(
+                                children: [
+                                  // Avatarul circular cu poza exercițiului
+                                  CircleAvatar(
+                                    radius: 20,
+                                    backgroundColor: theme
+                                        .colorScheme.surfaceContainerHighest,
+                                    backgroundImage: !isImageEmpty
+                                        ? AssetImage('assets/$coverImage')
+                                        : null,
+                                    child: isImageEmpty
+                                        ? Icon(
+                                            Icons.image_not_supported,
+                                            size: 14,
+                                            color: theme
+                                                .colorScheme.onSurfaceVariant,
+                                          )
+                                        : null,
+                                  ),
+                                  const SizedBox(width: 12),
+
+                                  // Numele exercițiului
+                                  Expanded(
+                                    child: Text(
+                                      exerciseName,
+                                      style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                          color: theme.colorScheme.onSurface),
+                                    ),
+                                  ),
+
+                                  // Mic indicator să sugereze click-ul (chevron discret)
+                                  Icon(
+                                    Icons.chevron_right,
+                                    color: theme.colorScheme.onSurfaceVariant
+                                        .withOpacity(0.5),
+                                    size: 18,
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
                           Divider(
                             height: 16,
-                            color: Theme.of(context)
-                                .colorScheme
-                                .primary
-                                .withOpacity(0.2),
+                            color: theme.colorScheme.primary.withOpacity(0.2),
                           ),
-                          ...exercise.sets.asMap().entries.map((entry) {
+
+                          // Rândurile cu seturi
+                          ...loggedExercise.sets.asMap().entries.map((entry) {
                             int setIdx = entry.key;
                             final set = entry.value;
 
@@ -262,15 +310,13 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
                                 children: [
                                   CircleAvatar(
                                     radius: 10,
-                                    backgroundColor: Theme.of(context)
-                                        .colorScheme
-                                        .primary
+                                    backgroundColor: theme.colorScheme.primary
                                         .withOpacity(0.2),
                                     child: Text(
                                       '${setIdx + 1}',
                                       style: TextStyle(
                                           fontSize: 11,
-                                          color: Theme.of(context).hintColor,
+                                          color: theme.hintColor,
                                           fontWeight: FontWeight.bold),
                                     ),
                                   ),

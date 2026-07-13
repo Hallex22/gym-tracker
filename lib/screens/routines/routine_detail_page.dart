@@ -3,12 +3,13 @@ import 'package:gym_tracker/screens/exercises/exercise_detail_page.dart';
 import 'package:gym_tracker/screens/routines/routine_form_page.dart';
 import '../../main.dart'; // Pentru acces la routinesBox și exercisesBox
 import '../../models/models.dart';
-import '../../widgets/app_actions_sheet.dart'; // 💡 Importul drawer-ului tău custom
+import '../../widgets/app_actions_sheet.dart'; // Importul drawer-ului tău custom
 import '../workout/active_workout_page.dart';
 
 class RoutineDetailPage extends StatefulWidget {
   final Routine routine;
-  final dynamic routineKey; // Cheia din Hive pentru a o putea trimite mai departe la editare/ștergere
+  final dynamic
+      routineKey; // Cheia din Hive pentru a o putea trimite mai departe la editare/ștergere
 
   const RoutineDetailPage({
     super.key,
@@ -49,17 +50,13 @@ class _RoutineDetailPageState extends State<RoutineDetailPage> {
           },
         ),
 
-        // 2. Share Rutină (💡 ACUM ESTE FUNCȚIONAL!)
+        // 2. Share Rutină
         SheetActionItem(
           icon: Icons.share_outlined,
           label: 'Share Routine Code',
           color: theme.colorScheme.primary,
           onPressed: () {
-            // Generăm codul Base64 ultra-compact pe care l-am implementat în model
             final String shareCode = widget.routine.toShareCode();
-            
-            // Îl copiem direct în Clipboard (opțional, poți folosi și pachetul share_plus pe viitor)
-            // Pentru moment, îl arătăm într-un dialog curat de unde îl poate copia
             _showShareCodeDialog(context, shareCode);
           },
         ),
@@ -87,11 +84,16 @@ class _RoutineDetailPageState extends State<RoutineDetailPage> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Give this code to your friend. They can import it directly into their app:', style: TextStyle(fontSize: 13)),
+            const Text(
+                'Give this code to your friend. They can import it directly into their app:',
+                style: TextStyle(fontSize: 13)),
             const SizedBox(height: 12),
             SelectableText(
               code,
-              style: const TextStyle(fontFamily: 'monospace', fontSize: 12, color: Colors.blueAccent),
+              style: const TextStyle(
+                  fontFamily: 'monospace',
+                  fontSize: 12,
+                  color: Colors.blueAccent),
             ),
           ],
         ),
@@ -111,7 +113,8 @@ class _RoutineDetailPageState extends State<RoutineDetailPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Routine? 🚨'),
-        content: Text('Are you sure you want to delete "${widget.routine.title}"? This action cannot be undone.'),
+        content: Text(
+            'Are you sure you want to delete "${widget.routine.title}"? This action cannot be undone.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -171,12 +174,16 @@ class _RoutineDetailPageState extends State<RoutineDetailPage> {
                     children: [
                       Text(
                         widget.routine.title,
-                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
+                        style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.onSurface),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         '${widget.routine.exercises.length} exercises included',
-                        style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+                        style: TextStyle(
+                            color: theme.colorScheme.onSurfaceVariant),
                       ),
                     ],
                   ),
@@ -190,7 +197,9 @@ class _RoutineDetailPageState extends State<RoutineDetailPage> {
           Expanded(
             child: widget.routine.exercises.isEmpty
                 ? Center(
-                    child: Text('This routine has no exercises yet.', style: TextStyle(color: theme.colorScheme.onSurfaceVariant)),
+                    child: Text('This routine has no exercises yet.',
+                        style: TextStyle(
+                            color: theme.colorScheme.onSurfaceVariant)),
                   )
                 : ListView.builder(
                     itemCount: widget.routine.exercises.length,
@@ -198,14 +207,15 @@ class _RoutineDetailPageState extends State<RoutineDetailPage> {
                     itemBuilder: (context, index) {
                       final routineExercise = widget.routine.exercises[index];
 
-                      // 💡 SPARLA PRINCIPALĂ: Extragem obiectul full Exercise din cutia globală Hive
-                      final rawExerciseData = exercisesBox.get(routineExercise.exerciseId);
+                      // Extragem obiectul full Exercise din cutia globală Hive
+                      final rawExerciseData =
+                          exercisesBox.get(routineExercise.exerciseId);
 
-                      // Dacă dintr-un motiv oarecare exercițiul nu mai există în baza locală, creăm un fallback vizual durabil
                       Exercise? fullExercise;
                       String exerciseName = 'Unknown Exercise';
                       String muscleGroup = 'Core';
                       String equipmentName = 'Bodyweight';
+                      String? coverImage;
 
                       if (rawExerciseData != null) {
                         if (rawExerciseData is Map) {
@@ -213,18 +223,24 @@ class _RoutineDetailPageState extends State<RoutineDetailPage> {
                         } else {
                           fullExercise = rawExerciseData as Exercise;
                         }
-                        
+
                         exerciseName = fullExercise.name;
-                        muscleGroup = fullExercise.primaryMuscles.isNotEmpty 
-                            ? fullExercise.primaryMuscles.first.group.name 
+                        muscleGroup = fullExercise.primaryMuscles.isNotEmpty
+                            ? fullExercise.primaryMuscles.first.group.name
                             : 'Target';
-                        equipmentName = fullExercise.equipment.name.toUpperCase();
+                        equipmentName =
+                            fullExercise.equipment.name.toUpperCase();
+                        coverImage = fullExercise.coverImage;
                       }
+
+                      final isImageEmpty =
+                          coverImage == null || coverImage.trim().isEmpty;
 
                       return Card(
                         margin: const EdgeInsets.only(bottom: 12),
                         elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
                         child: InkWell(
                           borderRadius: BorderRadius.circular(10),
                           onTap: () {
@@ -232,49 +248,99 @@ class _RoutineDetailPageState extends State<RoutineDetailPage> {
                               Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (context) => ExerciseDetailPage(exercise: fullExercise!),
+                                    builder: (context) => ExerciseDetailPage(
+                                        exercise: fullExercise!),
                                   ));
                             }
                           },
                           child: Padding(
-                            padding: const EdgeInsets.all(14.0),
+                            padding: const EdgeInsets.all(12.0),
                             child: Row(
                               children: [
-                                Text(
-                                  '${index + 1}',
-                                  style: TextStyle(fontWeight: FontWeight.bold, color: theme.colorScheme.onSurfaceVariant, fontSize: 16),
+                                // 1. Indexul numeric al exercițiului
+                                SizedBox(
+                                  width: 24,
+                                  child: Text(
+                                    '${index + 1}',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: theme.colorScheme.onSurfaceVariant
+                                          .withOpacity(0.6),
+                                      fontSize: 14,
+                                    ),
+                                    textAlign: Alignment.center.x == 0
+                                        ? TextAlign.center
+                                        : TextAlign.start,
+                                  ),
                                 ),
-                                const SizedBox(width: 16),
+                                const SizedBox(width: 8),
+
+                                // 💡 2. NEW ELEMENT: Avatarul circular cu imaginea exercițiului
+                                CircleAvatar(
+                                  radius: 22,
+                                  backgroundColor:
+                                      theme.colorScheme.surfaceContainerHighest,
+                                  backgroundImage: !isImageEmpty
+                                      ? AssetImage('assets/$coverImage')
+                                      : null,
+                                  child: isImageEmpty
+                                      ? Icon(
+                                          Icons.image_not_supported,
+                                          size: 14,
+                                          color: theme
+                                              .colorScheme.onSurfaceVariant,
+                                        )
+                                      : null,
+                                ),
+                                const SizedBox(width: 14),
+
+                                // 3. Informațiile text despre exercițiu (ocupă tot spațiul rămas liber)
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         exerciseName,
-                                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
+                                        style: TextStyle(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.bold,
+                                            color: theme.colorScheme.onSurface),
                                       ),
-                                      const SizedBox(height: 4),
+                                      const SizedBox(height: 3),
                                       Text(
                                         '${muscleGroup.toUpperCase()} • $equipmentName',
-                                        style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
+                                        style: TextStyle(
+                                            fontSize: 11,
+                                            color: theme
+                                                .colorScheme.onSurfaceVariant,
+                                            fontWeight: FontWeight.w500),
                                       ),
                                     ],
                                   ),
                                 ),
-                                // 💡 ELEMENT EXCLUSIV: Afișăm numărul de seturi preconfigurat (ex: 4 SETS)
+                                const SizedBox(width: 8),
+
+                                // 💡 4. MUTAT ÎN CAPĂT: Badge-ul exclusiv cu numărul de seturi țintă
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 6),
                                   decoration: BoxDecoration(
-                                    color: theme.colorScheme.primary.withOpacity(0.08),
+                                    color: theme.colorScheme.primary
+                                        .withOpacity(0.08),
                                     borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                        color: theme.colorScheme.primary
+                                            .withOpacity(0.15)),
                                   ),
                                   child: Text(
                                     '${routineExercise.targetSetsCount} SETS',
-                                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: theme.colorScheme.primary),
+                                    style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: theme.colorScheme.primary),
                                   ),
                                 ),
-                                const SizedBox(width: 8),
-                                Icon(Icons.chevron_right, color: theme.colorScheme.onSurfaceVariant, size: 18),
                               ],
                             ),
                           ),
@@ -295,21 +361,26 @@ class _RoutineDetailPageState extends State<RoutineDetailPage> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: theme.colorScheme.primary,
                     foregroundColor: theme.colorScheme.onPrimary,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
                     elevation: 2,
                   ),
                   onPressed: () {
                     Navigator.pushReplacement(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => ActiveWorkoutPage(routine: widget.routine),
+                        builder: (context) =>
+                            ActiveWorkoutPage(routine: widget.routine),
                       ),
                     );
                   },
                   icon: const Icon(Icons.play_arrow, size: 24),
                   label: const Text(
                     'Start Workout',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.3),
+                    style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.3),
                   ),
                 ),
               ),

@@ -31,6 +31,12 @@ android {
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
         }
+        
+        // 💡 ADAUGĂ ACEST BLOC PENTRU DEBUG:
+        debug {
+            applicationIdSuffix = ".debug"
+            signingConfig = signingConfigs.getByName("debug")
+        }
     }
 }
 

@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'enums/enums.dart';
 import 'models/models.dart';
 import 'navigation/main_navigation_hub.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 // Box-urile globale pe care le importăm în celelalte pagini
 late Box exercisesBox;
@@ -29,8 +30,8 @@ void main() async {
   // Dacă vrei să forțezi curățarea datelor vechi (la schimbarea de modele),
   // poți decomenta linia de mai jos o singură dată:
   // await exercisesBox.clear();
-  await routinesBox.clear();
-  await logsBox.clear();
+  // await routinesBox.clear();
+  // await logsBox.clear();
 
   // Dacă aplicația e proaspăt instalată, citim JSON-ul din assets și populăm Hive
   await _seedDatabaseFromJsonIfNeeded();
