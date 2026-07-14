@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:gym_tracker/enums/workout_status.dart';
+import 'package:gym_tracker/widgets/top_toast.dart';
 import 'package:table_calendar/table_calendar.dart';
 import '../../models/models.dart';
 import '../../services/database_service.dart';
@@ -199,11 +200,7 @@ class _CalendarPageState extends State<CalendarPage> {
                                 ),
                               );
                             } else {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                    content: Text(
-                                        'Error: Workout log key not found.')),
-                              );
+                              TopToast.show(context, 'Error: Workout log key not found.', type: ToastType.error);
                             }
                           },
                         ),

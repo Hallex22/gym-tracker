@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart'; // 💡 Necesar pentru deschiderea link-ului Muscle Wiki
 import '../../../enums/enums.dart';
 import '../../../models/models.dart';
+import '../../widgets/top_toast.dart';
 
 class ExerciseDetailPage extends StatelessWidget {
   final Exercise exercise;
@@ -16,9 +17,7 @@ class ExerciseDetailPage extends StatelessWidget {
       await launchUrl(url, mode: LaunchMode.inAppBrowserView);
     } catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not open the link. 🌐')),
-      );
+      TopToast.show(context, 'Could not open the link', type: ToastType.warning);
     }
   }
 

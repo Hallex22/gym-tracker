@@ -11,6 +11,7 @@ class DatabaseService {
   static late Box routinesBox;
   static late Box logsBox;
   static late Box routineFoldersBox; // Noul box pentru v2.0.0
+  static late Box settingsBox;
 
   /// 🚀 Inițializarea completă a bazei de date
   static Future<void> init() async {
@@ -23,6 +24,7 @@ class DatabaseService {
     logsBox = await Hive.openBox('workout_logs');
     routineFoldersBox =
         await Hive.openBox('routine_folders'); // Adăugat pentru foldere
+    settingsBox = await Hive.openBox('settings');
 
     // Executăm popularea inițială dacă este nevoie
     await _seedDatabaseFromJsonIfNeeded();

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:gym_tracker/enums/workout_status.dart';
+import 'package:gym_tracker/screens/profile/settings_page.dart';
 import 'package:gym_tracker/screens/workout/workout_detail_page.dart';
 import '../../models/models.dart';
 import '../../services/database_service.dart';
@@ -86,9 +87,20 @@ class _ProfilePageState extends State<ProfilePage> {
             },
           ),
           IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadWorkoutHistory,
-          )
+            icon: Icon(Icons.settings),
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const SettingsPage(),
+                ),
+              );
+            },
+          ),
+          // IconButton(
+          //   icon: const Icon(Icons.refresh),
+          //   onPressed: _loadWorkoutHistory,
+          // )
         ],
       ),
       body: _finishedLogsWithKeys.isEmpty
@@ -236,7 +248,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                           const SizedBox(width: 6),
                                           Text(
                                             log.endTime != null
-                                                ? '${log.endTime!.difference(log.startTime).inMinutes} min'
+                                                ? log.formattedDuration
                                                 : '0 min',
                                             style: TextStyle(
                                                 fontSize: 15,

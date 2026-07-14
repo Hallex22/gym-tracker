@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:gym_tracker/enums/workout_status.dart';
 import 'package:gym_tracker/screens/routines/routine_detail_page.dart';
 import 'package:gym_tracker/screens/routines/routine_form_page.dart';
+import 'package:gym_tracker/services/stats_service.dart';
 import 'package:gym_tracker/widgets/top_toast.dart';
 import '../models/models.dart';
 import '../widgets/app_actions_sheet.dart';
@@ -86,9 +87,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   if (!context.mounted) return;
                   Navigator.pop(context);
                   _loadData();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Workout session discarded.')),
-                  );
+                  TopToast.show(context, 'Workout session discarded.',
+                      type: ToastType.info);
                 },
               ),
               const SizedBox(height: 8),
@@ -626,13 +626,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                   'Successfully imported "${importedRoutine.title}"! 🏋️‍♂️',
                                   type: ToastType.success);
                             } else {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                      'Invalid share code. Please try again! ⚠️'),
-                                  backgroundColor: Colors.redAccent,
-                                ),
-                              );
+                              TopToast.show(context, 'Invalid share code. Please try again!', type: ToastType.error);
                             }
                           },
                         ),
@@ -652,8 +646,55 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    final int streakWeeks = StatsService.calculateWeeklyStreak();
+    final bool isStreakActive = StatsService.isStreakActiveThisWeek();
+
     return Scaffold(
-      appBar: AppBar(title: const Text('GymTracker')),
+      appBar: AppBar(
+        title: const Text(
+          'GymTracker',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        centerTitle: false,
+        actions: [
+          if (streakWeeks > 0) ...[
+            Padding(
+              padding: const EdgeInsets.only(right: 16.0),
+              child: Tooltip(
+                message: isStreakActive
+                    ? 'Streak active for this week! 🔥'
+                    : 'Log a workout to keep your streak alive! ⏳',
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons
+                          .local_fire_department, // Sau Icons.local_fire_department
+                      size: 22,
+                      color: isStreakActive
+                          ? theme.colorScheme.secondary
+                          // .shade700 // Portocaliu aprins când e activ
+                          : theme.colorScheme.onSurface
+                              .withOpacity(0.2), // Gri șters când e inactiv
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '$streakWeeks',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: isStreakActive
+                            ? theme.colorScheme.onSurface
+                            : theme.colorScheme.onSurface.withOpacity(0.4),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -939,18 +980,22 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
               // B. SECȚIUNEA GENERALĂ (UNASSIGNED)
               if (_unassignedRoutines.isNotEmpty) ...[
-                const Padding(
+                Padding(
                   padding: EdgeInsets.only(left: 20.0, top: 20.0, bottom: 6.0),
                   child: Row(
                     children: [
                       Icon(Icons.grid_view_rounded,
-                          size: 16, color: Colors.grey),
+                          size: 16,
+                          color:
+                              Theme.of(context).colorScheme.onSurfaceVariant),
                       SizedBox(width: 8),
                       Text('General Routines',
                           style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
-                              color: Colors.grey)),
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant)),
                     ],
                   ),
                 ),

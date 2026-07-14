@@ -3,6 +3,7 @@ import 'package:gym_tracker/enums/workout_status.dart';
 import 'package:gym_tracker/screens/exercises/exercise_detail_page.dart';
 import 'package:gym_tracker/screens/exercises/exercise_selection_page.dart';
 import 'package:gym_tracker/widgets/app_buttons.dart';
+import 'package:gym_tracker/widgets/top_toast.dart';
 import '../../models/models.dart';
 import '../../enums/enums.dart';
 import '../../services/database_service.dart';
@@ -173,12 +174,8 @@ class _WorkoutFormPageState extends State<WorkoutFormPage> {
 
   Future<void> _handleSave() async {
     if (_endTime.isBefore(_startTime)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('End time must be after start time. ⚠️'),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
+      TopToast.show(context, 'End time must be after start time.',
+          type: ToastType.error);
       return;
     }
 

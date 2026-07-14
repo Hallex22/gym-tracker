@@ -1,23 +1,34 @@
-import 'package:gym_tracker/enums/workout_status.dart';
-
 // Model pentru un singur set efectuat si salvat in istoric
+import '../enums/enums.dart';
+
 class LoggedSet {
   final double weight;
   final int reps;
+  final SetType type;
+  final bool isCompleted;
 
   const LoggedSet({
     required this.weight,
     required this.reps,
+    this.type = SetType.normal,
+    this.isCompleted = false,
   });
 
   Map<String, dynamic> toMap() => {
         'weight': weight,
         'reps': reps,
+        'type': type.name,
+        'isCompleted': isCompleted,
       };
 
   factory LoggedSet.fromMap(Map<dynamic, dynamic> map) => LoggedSet(
         weight: (map['weight'] ?? 0.0).toDouble(),
         reps: (map['reps'] ?? 0).toInt(),
+        type: SetType.values.firstWhere(
+          (e) => e.name == map['type'],
+          orElse: () => SetType.normal,
+        ),
+        isCompleted: map['isCompleted'] as bool? ?? false,
       );
 
   double get setVolume {

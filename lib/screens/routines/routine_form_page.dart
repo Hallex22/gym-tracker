@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:gym_tracker/widgets/top_toast.dart';
 import '../../models/models.dart';
 import '../../services/database_service.dart';
 import '../../widgets/app_buttons.dart'; // Importul butoanelor reutilizabile
@@ -80,10 +81,8 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
   Future<void> _saveRoutine() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedRoutineExercises.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Please select at least one exercise! ⚠️')),
-      );
+      TopToast.show(context, 'Please select at least one exercise!',
+          type: ToastType.warning);
       return;
     }
 
@@ -97,20 +96,21 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
     );
 
     if (_isEditMode) {
-      await DatabaseService.routinesBox.put(widget.routineKey, routineData.toMap());
+      await DatabaseService.routinesBox
+          .put(widget.routineKey, routineData.toMap());
     } else {
       await DatabaseService.routinesBox.add(routineData.toMap());
     }
 
     if (!mounted) return;
     Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(_isEditMode
-            ? 'Routine updated successfully! 📝'
-            : 'Routine created successfully! 🎉'),
-      ),
-    );
+
+    TopToast.show(
+        context,
+        _isEditMode
+            ? 'Routine updated successfully!'
+            : 'Routine created successfully!',
+        type: ToastType.success);
   }
 
   Future<void> _deleteRoutine() async {
@@ -245,7 +245,8 @@ class _RoutineFormPageState extends State<RoutineFormPage> {
                         final routineEx = _selectedRoutineExercises[index];
 
                         // 💡 Obținem datele complete ale exercițiului global din Hive pentru UI
-                        final rawEx = DatabaseService.exercisesBox.get(routineEx.exerciseId);
+                        final rawEx = DatabaseService.exercisesBox
+                            .get(routineEx.exerciseId);
 
                         String exerciseName = 'Unknown Exercise';
                         String extraInfo = 'CORE • BODYWEIGHT';

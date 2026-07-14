@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:gym_tracker/utils/date_utils.dart';
+import 'package:gym_tracker/widgets/top_toast.dart';
 import '../../models/models.dart';
 import '../../services/database_service.dart';
 import '../../widgets/app_actions_sheet.dart';
@@ -254,9 +255,8 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
       if (!context.mounted) return;
 
       Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Workout deleted successfully.')),
-      );
+      TopToast.show(context, 'Workout deleted successfully.',
+          type: ToastType.info);
     }
   }
 

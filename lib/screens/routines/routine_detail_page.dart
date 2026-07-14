@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:gym_tracker/screens/exercises/exercise_detail_page.dart';
 import 'package:gym_tracker/screens/routines/routine_form_page.dart';
 import '../../models/models.dart';
 import '../../services/database_service.dart';
 import '../../widgets/app_actions_sheet.dart';
+import '../../widgets/top_toast.dart';
 import '../workout/active_workout_page.dart';
 
 class RoutineDetailPage extends StatefulWidget {
@@ -24,8 +26,6 @@ class RoutineDetailPage extends StatefulWidget {
 class _RoutineDetailPageState extends State<RoutineDetailPage> {
   // --- DRAWER-UL TĂU CUSTOM PREMIUM PENTRU OPȚIUNI ---
   void _showRoutineOptionsSheet(BuildContext context) {
-    final theme = Theme.of(context);
-
     AppActionsSheet.show(
       context: context,
       title: 'Routine Options ⚙️',
@@ -54,10 +54,13 @@ class _RoutineDetailPageState extends State<RoutineDetailPage> {
         SheetActionItem(
           icon: Icons.share_outlined,
           label: 'Share Routine Code',
-          color: theme.colorScheme.primary,
-          onPressed: () {
-            final String shareCode = widget.routine.toShareCode();
-            _showShareCodeDialog(context, shareCode);
+          onPressed: () async {
+            final shareCode = widget.routine.toShareCode();
+            await Clipboard.setData(ClipboardData(text: shareCode));
+            if (!context.mounted) return;
+            TopToast.show(context,
+                '"${widget.routine.title}" code copied successfully! 🦾',
+                type: ToastType.success);
           },
         ),
 
@@ -71,39 +74,6 @@ class _RoutineDetailPageState extends State<RoutineDetailPage> {
           },
         ),
       ],
-    );
-  }
-
-  // --- DIALOG AFIȘARE COD SHARE ---
-  void _showShareCodeDialog(BuildContext context, String code) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Routine Share Code 📋'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-                'Give this code to your friend. They can import it directly into their app:',
-                style: TextStyle(fontSize: 13)),
-            const SizedBox(height: 12),
-            SelectableText(
-              code,
-              style: const TextStyle(
-                  fontFamily: 'monospace',
-                  fontSize: 12,
-                  color: Colors.blueAccent),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
     );
   }
 
@@ -129,9 +99,8 @@ class _RoutineDetailPageState extends State<RoutineDetailPage> {
               Navigator.pop(context); // Închidem dialogul
               Navigator.pop(context); // Ne întoarcem pe HomePage
 
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('"${widget.routine.title}" deleted.')),
-              );
+              TopToast.show(context, '"${widget.routine.title}" deleted.',
+                  type: ToastType.info);
             },
             child: const Text('Delete', style: TextStyle(color: Colors.white)),
           ),
@@ -181,7 +150,7 @@ class _RoutineDetailPageState extends State<RoutineDetailPage> {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '${widget.routine.exercises.length} exercises included',
+                        widget.routine.description ?? "",
                         style: TextStyle(
                             color: theme.colorScheme.onSurfaceVariant),
                       ),
@@ -208,8 +177,8 @@ class _RoutineDetailPageState extends State<RoutineDetailPage> {
                       final routineExercise = widget.routine.exercises[index];
 
                       // Extragem obiectul full Exercise din cutia globală Hive
-                      final rawExerciseData =
-                          DatabaseService.exercisesBox.get(routineExercise.exerciseId);
+                      final rawExerciseData = DatabaseService.exercisesBox
+                          .get(routineExercise.exerciseId);
 
                       Exercise? fullExercise;
                       String exerciseName = 'Unknown Exercise';
