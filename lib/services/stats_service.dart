@@ -187,6 +187,30 @@ class StatsService {
       bestSessionVolume: bestSessionVolume,
     );
   }
+
+  static List<MapEntry<WorkoutLog, LoggedExercise>> getExerciseHistory(int exerciseId) {
+    if (!DatabaseService.logsBox.isOpen) return [];
+
+    final List<MapEntry<WorkoutLog, LoggedExercise>> history = [];
+
+    for (var value in DatabaseService.logsBox.values) {
+      final log = WorkoutLog.fromMap(value as Map);
+
+      if (log.status != WorkoutStatus.finished) continue;
+
+      for (var loggedExercise in log.exercises) {
+        if (loggedExercise.exerciseId == exerciseId) {
+          history.add(MapEntry(log, loggedExercise));
+          break; // Trecem la următorul log dacă l-am găsit în această sesiune
+        }
+      }
+    }
+
+    // Sortăm istoricul descrescător după data de început (startTime) a antrenamentului
+    history.sort((a, b) => b.key.startTime.compareTo(a.key.startTime));
+
+    return history;
+  }
 }
 
 // Ceva

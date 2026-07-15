@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:gym_tracker/enums/workout_status.dart';
+import 'package:gym_tracker/extensions/string_extension.dart';
 import 'package:gym_tracker/screens/exercises/exercise_detail_page.dart';
 import 'package:gym_tracker/screens/exercises/exercise_selection_page.dart';
+import 'package:gym_tracker/services/stats_service.dart';
 import 'package:gym_tracker/widgets/app_buttons.dart';
 import 'package:gym_tracker/widgets/top_toast.dart';
 import '../../models/models.dart';
 import '../../enums/enums.dart';
+import '../../models/app_settings.dart';
 import '../../services/database_service.dart';
 import '../../widgets/app_actions_sheet.dart';
 
 /// Pagina de editare pentru un antrenament DEJA FINALIZAT (status = finished).
-/// Permite corectarea titlului, orei de start/final (deci a duratei), a
-/// exercițiilor efectuate și a seturilor (weight/reps) - pentru cazul in care
-/// utilizatorul a introdus date greșite sau a uitat să apese Finish la timp.
 class WorkoutFormPage extends StatefulWidget {
-  final dynamic logKey; // cheia din logsBox (Hive) pentru acest log
+  final dynamic logKey;
   final WorkoutLog workoutLog;
 
   const WorkoutFormPage({
@@ -35,9 +35,9 @@ class _WorkoutFormPageState extends State<WorkoutFormPage> {
 
   bool _isDirty = false;
 
-  // Cache exercitiu-complet indexat dupa id, la fel ca in ActiveWorkoutPage,
-  // ca sa afisam numele/imaginea corecte pentru fiecare exercitiu logat.
   late Map<int, Exercise> _exerciseCache;
+  late UnitSystem _globalUnit;
+  final Map<int, UnitSystem> _exerciseUnitOverride = {};
 
   @override
   void initState() {
@@ -47,8 +47,6 @@ class _WorkoutFormPageState extends State<WorkoutFormPage> {
     _startTime = widget.workoutLog.startTime;
     _endTime = widget.workoutLog.endTime ?? widget.workoutLog.startTime;
 
-    // Copie mutabila (nu editam direct obiectul original, cat timp userul
-    // nu apasa Save - daca da Cancel, nimic nu se salveaza).
     _exercises = widget.workoutLog.exercises
         .map((e) => LoggedExercise(
               exerciseId: e.exerciseId,
@@ -56,6 +54,7 @@ class _WorkoutFormPageState extends State<WorkoutFormPage> {
             ))
         .toList();
 
+    _loadUnitPreference();
     _buildExerciseCache();
   }
 
@@ -63,6 +62,36 @@ class _WorkoutFormPageState extends State<WorkoutFormPage> {
   void dispose() {
     _titleController.dispose();
     super.dispose();
+  }
+
+  void _loadUnitPreference() {
+    final Map? rawSettings =
+        DatabaseService.settingsBox.get('appSettings') as Map?;
+    final AppSettings settings = rawSettings != null
+        ? AppSettings.fromMap(rawSettings)
+        : const AppSettings();
+    _globalUnit = settings.unitSystem;
+  }
+
+  UnitSystem _unitFor(int exerciseId) =>
+      _exerciseUnitOverride[exerciseId] ?? _globalUnit;
+
+  void _toggleUnitOverride(int exerciseId) {
+    setState(() {
+      if (_exerciseUnitOverride.containsKey(exerciseId)) {
+        _exerciseUnitOverride.remove(exerciseId);
+      } else {
+        _exerciseUnitOverride[exerciseId] =
+            _globalUnit == UnitSystem.kg ? UnitSystem.lbs : UnitSystem.kg;
+      }
+    });
+  }
+
+  String _formatWeight(double value) {
+    if (value == value.roundToDouble()) {
+      return value.toStringAsFixed(0);
+    }
+    return value.toStringAsFixed(1);
   }
 
   void _buildExerciseCache() {
@@ -77,6 +106,53 @@ class _WorkoutFormPageState extends State<WorkoutFormPage> {
 
   void _markDirty() {
     if (!_isDirty) setState(() => _isDirty = true);
+  }
+
+  void _showSetTypeSheet(
+      LoggedExercise exercise, int setIndex, LoggedSet currentSet) {
+    final List<SheetActionItem> actions = SetType.values.map((type) {
+      return SheetActionItem(
+        icon: type.icon,
+        label: type.label,
+        color: type == currentSet.type
+            ? Theme.of(context).colorScheme.primary
+            : null,
+        onPressed: () {
+          setState(() {
+            exercise.sets[setIndex] = LoggedSet(
+              weight: currentSet.weight,
+              reps: currentSet.reps,
+              type: type,
+              isCompleted: currentSet.isCompleted,
+            );
+          });
+          _markDirty();
+        },
+      );
+    }).toList();
+
+    if (exercise.sets.length > 1) {
+      actions.add(
+        SheetActionItem(
+          icon: Icons.delete_sweep_outlined,
+          label: 'Delete Set #${setIndex + 1}',
+          color: Colors.redAccent,
+          onPressed: () {
+            setState(() {
+              exercise.sets.removeAt(setIndex);
+            });
+            _markDirty();
+          },
+        ),
+      );
+    }
+
+    AppActionsSheet.show(
+      context: context,
+      title: 'Set Options',
+      subtitle: 'Manage set #${setIndex + 1}',
+      actions: actions,
+    );
   }
 
   String _formatDateTime(DateTime dt) {
@@ -124,24 +200,22 @@ class _WorkoutFormPageState extends State<WorkoutFormPage> {
   }
 
   Map<String, dynamic> _computeStats() {
-    double volume = 0;
-    int setsCount = 0;
-
-    for (var ex in _exercises) {
-      for (var set in ex.sets) {
-        if (set.reps > 0) {
-          volume += set.weight * set.reps;
-          setsCount++;
-        }
-      }
-    }
+    final snapshotLog = WorkoutLog(
+      startTime: _startTime,
+      endTime: _endTime,
+      routineTitle: _titleController.text.trim(),
+      exercises: List.from(_exercises),
+      status: WorkoutStatus.finished,
+    );
 
     final rawMinutes = _endTime.difference(_startTime).inMinutes;
 
     return {
       'durationMin': rawMinutes < 0 ? 0 : rawMinutes,
-      'volume': volume,
-      'setsCount': setsCount,
+      'volume': snapshotLog.totalVolume,
+      'volumeStr':
+          '${_formatWeight(_globalUnit.toDisplay(snapshotLog.totalVolume))} ${_globalUnit.label}',
+      'setsCount': snapshotLog.completedSetsCount,
       'exercisesCount': _exercises.length,
     };
   }
@@ -192,7 +266,7 @@ class _WorkoutFormPageState extends State<WorkoutFormPage> {
     await DatabaseService.logsBox.put(widget.logKey, updatedLog.toMap());
 
     if (!mounted) return;
-    Navigator.pop(context, true); // true = a fost salvat, caller poate reface
+    Navigator.pop(context, true);
   }
 
   Future<void> _navigateToAddExercise() async {
@@ -312,9 +386,30 @@ class _WorkoutFormPageState extends State<WorkoutFormPage> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: const Text(
-            'Edit Workout',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          title: TextField(
+            controller: _titleController,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: theme.colorScheme.onSurface,
+            ),
+            decoration: InputDecoration(
+              hintText: 'Workout title...',
+              hintStyle: TextStyle(
+                fontWeight: FontWeight.normal,
+                fontSize: 14,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              border: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              errorBorder: InputBorder.none,
+              disabledBorder: InputBorder.none,
+              isDense: true,
+              contentPadding: EdgeInsets.zero,
+            ),
+            onChanged: (value) => _markDirty(),
           ),
           leadingWidth: 80,
           leading: TextButton(
@@ -347,27 +442,6 @@ class _WorkoutFormPageState extends State<WorkoutFormPage> {
           onTap: () => FocusScope.of(context).unfocus(),
           child: Column(
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextField(
-                    controller: _titleController,
-                    textAlign: TextAlign.left,
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.bold),
-                    decoration: InputDecoration(
-                      hintText: 'Workout title...',
-                      border: InputBorder.none,
-                      isDense: true,
-                      contentPadding: EdgeInsets.zero,
-                      suffixIcon: Icon(Icons.edit,
-                          size: 16, color: theme.colorScheme.onSurfaceVariant),
-                    ),
-                    onChanged: (value) => _markDirty(),
-                  ),
-                ),
-              ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
                 child: Column(
@@ -379,7 +453,7 @@ class _WorkoutFormPageState extends State<WorkoutFormPage> {
                       theme: theme,
                     ),
                     Divider(
-                        color: theme.dividerColor.withOpacity(0.3), height: 1),
+                        color: theme.primaryColor.withOpacity(0.2), height: 1),
                     _buildDateTimeTile(
                       label: 'Finished',
                       value: _endTime,
@@ -404,10 +478,7 @@ class _WorkoutFormPageState extends State<WorkoutFormPage> {
                   children: [
                     _buildStatColumn(
                         'Duration', '${stats['durationMin']} min', theme),
-                    _buildStatColumn(
-                        'Volume',
-                        '${(stats['volume'] as double).toStringAsFixed(0)} kg',
-                        theme),
+                    _buildStatColumn('Volume', stats['volumeStr'], theme),
                     _buildStatColumn('Sets', '${stats['setsCount']}', theme),
                   ],
                 ),
@@ -467,176 +538,287 @@ class _WorkoutFormPageState extends State<WorkoutFormPage> {
                           final displayName = fullExercise?.name ??
                               'Unknown exercise (ID: ${exercise.exerciseId})';
 
+                          final isBodyWeight =
+                              fullExercise?.equipment == Equipment.bodyweight;
+
+                          final unit = _unitFor(exercise.exerciseId);
+                          final hasOverride = _exerciseUnitOverride
+                              .containsKey(exercise.exerciseId);
+
                           return Card(
                             key: ValueKey(
                                 'edit_ex_${exercise.exerciseId}_$exIndex'),
+                            clipBehavior: Clip.antiAlias,
                             margin: const EdgeInsets.all(12),
                             child: Padding(
-                              padding: const EdgeInsets.all(12.0),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Icon(Icons.drag_handle,
-                                          color: theme
-                                              .colorScheme.onSurfaceVariant),
-                                      const SizedBox(width: 8),
-                                      if (!isMissingData && !isImageEmpty) ...[
-                                        CircleAvatar(
-                                          radius: 20,
-                                          backgroundColor: theme.colorScheme
-                                              .surfaceContainerHighest,
-                                          backgroundImage:
-                                              AssetImage('assets/$coverImage'),
-                                        ),
-                                        const SizedBox(width: 12),
-                                      ],
-                                      Expanded(
-                                        child: InkWell(
-                                          onTap: () {
-                                            if (fullExercise != null) {
-                                              Navigator.push(
-                                                context,
-                                                MaterialPageRoute(
-                                                  builder: (context) =>
-                                                      ExerciseDetailPage(
-                                                          exercise:
-                                                              fullExercise),
-                                                ),
-                                              );
-                                            }
-                                          },
-                                          borderRadius:
-                                              BorderRadius.circular(4),
-                                          child: Padding(
-                                            padding: const EdgeInsets.symmetric(
-                                                vertical: 4.0),
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  displayName,
-                                                  style: TextStyle(
-                                                      fontSize: 16,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      color: theme.colorScheme
-                                                          .onSurface),
-                                                ),
-                                                if (isMissingData ||
-                                                    isImageEmpty)
-                                                  Text(
-                                                    isMissingData
-                                                        ? '[⚠️ Missing from exercisesBox]'
-                                                        : '[⚠️ No cover image]',
-                                                    style: const TextStyle(
-                                                        fontSize: 11,
-                                                        color: Colors.redAccent,
-                                                        fontWeight:
-                                                            FontWeight.bold),
+                                  Padding(
+                                    padding:
+                                        const EdgeInsets.symmetric(horizontal: 12),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Icon(Icons.drag_handle,
+                                            color: theme
+                                                .colorScheme.onSurfaceVariant),
+                                        const SizedBox(width: 8),
+                                        if (!isMissingData && !isImageEmpty) ...[
+                                          CircleAvatar(
+                                            radius: 20,
+                                            backgroundColor: theme.colorScheme
+                                                .surfaceContainerHighest,
+                                            backgroundImage: AssetImage(
+                                                'assets/$coverImage'),
+                                          ),
+                                          const SizedBox(width: 12),
+                                        ],
+                                        Expanded(
+                                          child: InkWell(
+                                            onTap: () {
+                                              if (fullExercise != null) {
+                                                Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (context) =>
+                                                        ExerciseDetailPage(
+                                                            exercise:
+                                                                fullExercise),
                                                   ),
-                                              ],
+                                                );
+                                              }
+                                            },
+                                            borderRadius:
+                                                BorderRadius.circular(4),
+                                            child: Padding(
+                                              padding: const EdgeInsets
+                                                  .symmetric(vertical: 4.0),
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Row(
+                                                    children: [
+                                                      Flexible(
+                                                        child: Text(
+                                                          displayName,
+                                                          style: TextStyle(
+                                                              fontSize: 16,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                              color: theme
+                                                                  .colorScheme
+                                                                  .onSurface),
+                                                          maxLines: 1,
+                                                          overflow:
+                                                              TextOverflow
+                                                                  .ellipsis,
+                                                        ),
+                                                      ),
+                                                      if (hasOverride) ...[
+                                                        const SizedBox(
+                                                            width: 6),
+                                                        Container(
+                                                          padding: const EdgeInsets
+                                                              .symmetric(
+                                                              horizontal: 6,
+                                                              vertical: 1),
+                                                          decoration:
+                                                              BoxDecoration(
+                                                            color: theme
+                                                                .colorScheme
+                                                                .primary
+                                                                .withOpacity(
+                                                                    0.15),
+                                                            borderRadius:
+                                                                BorderRadius
+                                                                    .circular(
+                                                                        6),
+                                                          ),
+                                                          child: Text(
+                                                            unit.label,
+                                                            style: TextStyle(
+                                                              fontSize: 10,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                              color: theme
+                                                                  .colorScheme
+                                                                  .primary,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ],
+                                                  ),
+                                                  if (isMissingData ||
+                                                      isImageEmpty)
+                                                    Text(
+                                                      isMissingData
+                                                          ? '[⚠️ Missing from exercisesBox]'
+                                                          : '[⚠️ No cover image]',
+                                                      style: const TextStyle(
+                                                          fontSize: 11,
+                                                          color: Colors
+                                                              .redAccent,
+                                                          fontWeight:
+                                                              FontWeight
+                                                                  .bold),
+                                                    ),
+                                                ],
+                                              ),
                                             ),
                                           ),
                                         ),
-                                      ),
-                                      IconButton(
-                                        icon: Icon(Icons.more_vert,
-                                            color: theme
-                                                .colorScheme.onSurfaceVariant),
-                                        onPressed: () {
-                                          AppActionsSheet.show(
-                                            context: context,
-                                            title: displayName,
-                                            subtitle:
-                                                'Manage exercise in this workout',
-                                            actions: [
-                                              SheetActionItem(
-                                                icon: Icons.info_outline,
-                                                label: 'View Exercise Details',
-                                                onPressed: () {
-                                                  if (fullExercise != null) {
-                                                    Navigator.push(
-                                                      context,
-                                                      MaterialPageRoute(
-                                                        builder: (context) =>
-                                                            ExerciseDetailPage(
-                                                                exercise:
-                                                                    fullExercise),
-                                                      ),
-                                                    );
-                                                  }
-                                                },
-                                              ),
-                                              SheetActionItem(
-                                                icon: Icons.delete_outline,
-                                                label: 'Remove Exercise',
-                                                color: Colors.redAccent,
-                                                onPressed: () async {
-                                                  final confirmDelete =
-                                                      await showDialog<bool>(
-                                                    context: context,
-                                                    builder: (context) =>
-                                                        AlertDialog(
-                                                      title: const Text(
-                                                          'Remove Exercise? ⚠️'),
-                                                      content: Text(
-                                                          'Are you sure you want to remove "$displayName" and all its sets from this workout?'),
-                                                      actions: [
-                                                        TextButton(
-                                                          onPressed: () =>
-                                                              Navigator.pop(
-                                                                  context,
-                                                                  false),
-                                                          child: const Text(
-                                                              'Cancel',
-                                                              style: TextStyle(
-                                                                  color: Colors
-                                                                      .grey)),
-                                                        ),
-                                                        ElevatedButton(
-                                                          style: ElevatedButton
-                                                              .styleFrom(
-                                                            backgroundColor:
-                                                                Colors
-                                                                    .redAccent,
-                                                          ),
-                                                          onPressed: () =>
-                                                              Navigator.pop(
-                                                                  context,
-                                                                  true),
-                                                          child: const Text(
-                                                              'Remove',
-                                                              style: TextStyle(
-                                                                  color: Colors
-                                                                      .white)),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  );
-
-                                                  if (confirmDelete == true) {
+                                        IconButton(
+                                          icon: Icon(Icons.more_vert,
+                                              color: theme.colorScheme
+                                                  .onSurfaceVariant),
+                                          onPressed: () {
+                                            AppActionsSheet.show(
+                                              context: context,
+                                              title: displayName,
+                                              subtitle:
+                                                  'Manage exercise in this workout',
+                                              actions: [
+                                                SheetActionItem(
+                                                  icon: SetType.warmup.icon,
+                                                  label: 'Add Warmup Set',
+                                                  onPressed: () {
                                                     setState(() {
-                                                      _exercises
-                                                          .removeAt(exIndex);
+                                                      final firstWeight =
+                                                          sets.isNotEmpty
+                                                              ? sets.first
+                                                                  .weight
+                                                              : 0.0;
+                                                      final firstReps =
+                                                          sets.isNotEmpty
+                                                              ? sets.first
+                                                                  .reps
+                                                              : 0;
+                                                      sets.insert(
+                                                        0,
+                                                        LoggedSet(
+                                                          weight: firstWeight,
+                                                          reps: firstReps,
+                                                          type:
+                                                              SetType.warmup,
+                                                          isCompleted: false,
+                                                        ),
+                                                      );
                                                     });
                                                     _markDirty();
-                                                  }
-                                                },
-                                              ),
-                                            ],
-                                          );
-                                        },
-                                      ),
-                                    ],
+                                                  },
+                                                ),
+                                                SheetActionItem(
+                                                  icon: Icons.info_outline,
+                                                  label:
+                                                      'View Exercise Details',
+                                                  onPressed: () {
+                                                    if (fullExercise !=
+                                                        null) {
+                                                      Navigator.push(
+                                                        context,
+                                                        MaterialPageRoute(
+                                                          builder:
+                                                              (context) =>
+                                                                  ExerciseDetailPage(
+                                                                      exercise:
+                                                                          fullExercise),
+                                                        ),
+                                                      );
+                                                    }
+                                                  },
+                                                ),
+                                                if (!isBodyWeight)
+                                                  SheetActionItem(
+                                                    icon: Icons.swap_horiz,
+                                                    label: hasOverride
+                                                        ? 'Reset to ${_globalUnit.label} (default)'
+                                                        : 'Switch to ${(_globalUnit == UnitSystem.kg ? UnitSystem.lbs : UnitSystem.kg).label} for this exercise',
+                                                    onPressed: () =>
+                                                        _toggleUnitOverride(
+                                                            exercise
+                                                                .exerciseId),
+                                                  ),
+                                                SheetActionItem(
+                                                  icon: Icons.delete_outline,
+                                                  label: 'Remove Exercise',
+                                                  color: Colors.redAccent,
+                                                  onPressed: () async {
+                                                    final confirmDelete =
+                                                        await showDialog<
+                                                            bool>(
+                                                      context: context,
+                                                      builder: (context) =>
+                                                          AlertDialog(
+                                                        title: const Text(
+                                                            'Remove Exercise? ⚠️'),
+                                                        content: Text(
+                                                            'Are you sure you want to remove "$displayName" and all its sets from this workout?'),
+                                                        actions: [
+                                                          TextButton(
+                                                            onPressed: () =>
+                                                                Navigator.pop(
+                                                                    context,
+                                                                    false),
+                                                            child: const Text(
+                                                                'Cancel',
+                                                                style: TextStyle(
+                                                                    color: Colors
+                                                                        .grey)),
+                                                          ),
+                                                          ElevatedButton(
+                                                            style: ElevatedButton
+                                                                .styleFrom(
+                                                              backgroundColor:
+                                                                  Colors
+                                                                      .redAccent,
+                                                            ),
+                                                            onPressed: () =>
+                                                                Navigator.pop(
+                                                                    context,
+                                                                    true),
+                                                            child: const Text(
+                                                                'Remove',
+                                                                style: TextStyle(
+                                                                    color: Colors
+                                                                        .white)),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    );
+
+                                                    if (confirmDelete ==
+                                                        true) {
+                                                      setState(() {
+                                                        _exercises.removeAt(
+                                                            exIndex);
+                                                        _exerciseUnitOverride
+                                                            .remove(exercise
+                                                                .exerciseId);
+                                                      });
+                                                      _markDirty();
+                                                    }
+                                                  },
+                                                ),
+                                              ],
+                                            );
+                                          },
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                  Divider(
-                                      color: theme.colorScheme.primary
-                                          .withOpacity(0.2)),
+                                  Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12),
+                                      child: Divider(
+                                          color: theme.colorScheme.primary
+                                              .withOpacity(0.2))),
                                   Padding(
                                     padding: const EdgeInsets.symmetric(
                                         vertical: 4.0),
@@ -646,20 +828,68 @@ class _WorkoutFormPageState extends State<WorkoutFormPage> {
                                             width: 50,
                                             child: Text('Set',
                                                 style: TextStyle(
-                                                    fontWeight: FontWeight.w600,
+                                                    fontWeight:
+                                                        FontWeight.w600,
+                                                    fontSize: 12,
                                                     color: theme.colorScheme
-                                                        .onSurfaceVariant))),
-                                        Expanded(
-                                            child: Text('Weight (kg)',
+                                                        .onSurfaceVariant),
+                                                textAlign: TextAlign.center)),
+                                        SizedBox(
+                                            width: 100,
+                                            child: Text('Previous',
                                                 style: TextStyle(
-                                                    fontWeight: FontWeight.w600,
+                                                    fontWeight:
+                                                        FontWeight.w600,
+                                                    fontSize: 12,
                                                     color: theme.colorScheme
                                                         .onSurfaceVariant),
                                                 textAlign: TextAlign.center)),
                                         Expanded(
+                                          child: isBodyWeight
+                                              ? Text(
+                                                  'Body Weight',
+                                                  style: TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      fontSize: 12,
+                                                      color: theme.colorScheme
+                                                          .onSurfaceVariant),
+                                                  textAlign: TextAlign.center,
+                                                )
+                                              : Row(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment
+                                                          .center,
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    Icon(
+                                                      Icons.fitness_center,
+                                                      size: 12,
+                                                      color: theme.colorScheme
+                                                          .onSurfaceVariant
+                                                          .withOpacity(0.7),
+                                                    ),
+                                                    const SizedBox(width: 4),
+                                                    Text(
+                                                      unit.label.capitalize(),
+                                                      style: TextStyle(
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                          fontSize: 12,
+                                                          color: theme
+                                                              .colorScheme
+                                                              .onSurfaceVariant),
+                                                    ),
+                                                  ],
+                                                ),
+                                        ),
+                                        Expanded(
                                             child: Text('Reps',
                                                 style: TextStyle(
-                                                    fontWeight: FontWeight.w600,
+                                                    fontWeight:
+                                                        FontWeight.w600,
+                                                    fontSize: 12,
                                                     color: theme.colorScheme
                                                         .onSurfaceVariant),
                                                 textAlign: TextAlign.center)),
@@ -670,86 +900,323 @@ class _WorkoutFormPageState extends State<WorkoutFormPage> {
                                     final setIndex = entry.key;
                                     final set = entry.value;
 
-                                    return Padding(
+                                    final rowColor = setIndex % 2 == 0
+                                        ? Colors.transparent
+                                        : theme.colorScheme.secondary
+                                            .withOpacity(0.06);
+
+                                    final displayWeight =
+                                        unit.toDisplay(set.weight);
+
+                                    final weightController =
+                                        TextEditingController(
+                                      text: set.weight == 0.0
+                                          ? ''
+                                          : _formatWeight(displayWeight),
+                                    );
+                                    final repsController =
+                                        TextEditingController(
+                                      text: set.reps == 0
+                                          ? ''
+                                          : set.reps.toString(),
+                                    );
+                                    weightController.selection =
+                                        TextSelection.fromPosition(
+                                      TextPosition(
+                                          offset:
+                                              weightController.text.length),
+                                    );
+                                    repsController.selection =
+                                        TextSelection.fromPosition(
+                                      TextPosition(
+                                          offset: repsController.text.length),
+                                    );
+
+                                    final (prevWeightInKg, prevReps) =
+                                        StatsService.getPreviousSetRaw(
+                                            exerciseId: exercise.exerciseId,
+                                            setIndex: setIndex,
+                                            currentType: set.type,
+                                            activeExercises: _exercises);
+
+                                    final hasHistory =
+                                        prevWeightInKg > 0.0 || prevReps > 0;
+                                    String prevText = '-';
+
+                                    if (hasHistory) {
+                                      if (isBodyWeight) {
+                                        prevText = 'BW x $prevReps';
+                                      } else {
+                                        final displayPrevWeight =
+                                            unit.toDisplay(prevWeightInKg);
+                                        prevText =
+                                            '${_formatWeight(displayPrevWeight)} ${unit.label} × $prevReps';
+                                      }
+                                    }
+
+                                    return Container(
+                                      color: set.type == SetType.normal
+                                          ? rowColor
+                                          : null,
+                                      margin: const EdgeInsets.symmetric(
+                                          vertical: 1.0),
                                       padding: const EdgeInsets.symmetric(
-                                          vertical: 4.0),
+                                          vertical: 1.0, horizontal: 0),
+                                      decoration: set.type != SetType.normal
+                                          ? BoxDecoration(
+                                              color: set.type.color != null
+                                                  ? set.type.color!
+                                                      .withOpacity(0.08)
+                                                  : theme.cardColor,
+                                              borderRadius:
+                                                  BorderRadius.circular(6),
+                                              border: Border(
+                                                left: BorderSide(
+                                                  color: set.type.color ??
+                                                      theme.colorScheme
+                                                          .primary,
+                                                  width: 3,
+                                                ),
+                                              ),
+                                            )
+                                          : null,
                                       child: Row(
                                         children: [
                                           SizedBox(
-                                              width: 50,
-                                              child: Text('${setIndex + 1}',
-                                                  style: const TextStyle(
-                                                      fontSize: 16,
+                                            width: 50,
+                                            child: InkWell(
+                                              borderRadius:
+                                                  BorderRadius.circular(6),
+                                              onTap: () => _showSetTypeSheet(
+                                                  exercise, setIndex, set),
+                                              child: Padding(
+                                                padding: const EdgeInsets
+                                                    .symmetric(vertical: 2.0),
+                                                child: Column(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    Text(
+                                                      set.type !=
+                                                              SetType.normal
+                                                          ? set.type
+                                                              .shortLabel
+                                                          : '${setIndex + 1}',
+                                                      style: TextStyle(
+                                                        fontSize: 16,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        color: set.type
+                                                                .color ??
+                                                            theme.colorScheme
+                                                                .onSurface,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          SizedBox(
+                                            width: 100,
+                                            child: Align(
+                                              alignment: Alignment.center,
+                                              child: InkWell(
+                                                borderRadius:
+                                                    BorderRadius.circular(6),
+                                                onTap: hasHistory
+                                                    ? () {
+                                                        setState(() {
+                                                          exercise.sets[
+                                                                  setIndex] =
+                                                              LoggedSet(
+                                                            weight:
+                                                                prevWeightInKg,
+                                                            reps: prevReps,
+                                                            type: set.type,
+                                                            isCompleted:
+                                                                set.isCompleted,
+                                                          );
+                                                        });
+                                                        _markDirty();
+                                                      }
+                                                    : null,
+                                                child: Container(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                      horizontal: 6,
+                                                      vertical: 4),
+                                                  decoration: BoxDecoration(
+                                                    color: hasHistory
+                                                        ? theme.colorScheme
+                                                            .onSurface
+                                                            .withOpacity(0.04)
+                                                        : Colors.transparent,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            6),
+                                                  ),
+                                                  child: Text(
+                                                    prevText,
+                                                    style: TextStyle(
                                                       fontWeight:
-                                                          FontWeight.bold))),
-                                          Expanded(
-                                            child: Padding(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 8.0),
-                                              child: TextFormField(
-                                                initialValue: set.weight == 0.0
-                                                    ? ''
-                                                    : set.weight.toString(),
-                                                keyboardType:
-                                                    const TextInputType
-                                                        .numberWithOptions(
-                                                        decimal: true),
-                                                decoration:
-                                                    const InputDecoration(
-                                                        border:
-                                                            OutlineInputBorder(),
-                                                        contentPadding:
-                                                            EdgeInsets
-                                                                .symmetric(
-                                                                    horizontal:
-                                                                        8,
-                                                                    vertical:
-                                                                        4),
-                                                        hintText: '0'),
-                                                onChanged: (value) {
-                                                  final newWeight =
-                                                      double.tryParse(value) ??
-                                                          0.0;
-                                                  exercise.sets[setIndex] =
-                                                      LoggedSet(
-                                                          weight: newWeight,
-                                                          reps: set.reps);
-                                                  _markDirty();
-                                                },
+                                                          FontWeight.w500,
+                                                      color: theme.colorScheme
+                                                          .onSurfaceVariant
+                                                          .withOpacity(0.6),
+                                                    ),
+                                                    textAlign:
+                                                        TextAlign.center,
+                                                  ),
+                                                ),
                                               ),
                                             ),
                                           ),
                                           Expanded(
                                             child: Padding(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 8.0),
+                                              padding: const EdgeInsets
+                                                  .symmetric(horizontal: 4.0),
+                                              child: isBodyWeight
+                                                  ? Container(
+                                                      alignment:
+                                                          Alignment.center,
+                                                      padding: const EdgeInsets
+                                                          .symmetric(
+                                                          vertical: 10),
+                                                      child: Text(
+                                                        'BW',
+                                                        style: TextStyle(
+                                                            fontWeight:
+                                                                FontWeight
+                                                                    .w600,
+                                                            color: theme
+                                                                .colorScheme
+                                                                .onSurface),
+                                                      ),
+                                                    )
+                                                  : TextFormField(
+                                                      controller:
+                                                          weightController,
+                                                      textAlign:
+                                                          TextAlign.center,
+                                                      keyboardType:
+                                                          const TextInputType
+                                                              .numberWithOptions(
+                                                              decimal: true),
+                                                      style: TextStyle(
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                          color: theme
+                                                              .colorScheme
+                                                              .onSurface),
+                                                      decoration:
+                                                          InputDecoration(
+                                                        border:
+                                                            InputBorder.none,
+                                                        enabledBorder:
+                                                            InputBorder.none,
+                                                        focusedBorder:
+                                                            InputBorder.none,
+                                                        disabledBorder:
+                                                            InputBorder.none,
+                                                        errorBorder:
+                                                            InputBorder.none,
+                                                        focusedErrorBorder:
+                                                            InputBorder.none,
+                                                        contentPadding:
+                                                            const EdgeInsets
+                                                                .symmetric(
+                                                                horizontal: 8,
+                                                                vertical: 4),
+                                                        hintText: prevWeightInKg >
+                                                                0.0
+                                                            ? _formatWeight(unit
+                                                                .toDisplay(
+                                                                    prevWeightInKg))
+                                                            : '0',
+                                                        hintStyle: TextStyle(
+                                                            fontWeight:
+                                                                FontWeight
+                                                                    .normal,
+                                                            color: theme
+                                                                .colorScheme
+                                                                .onSurfaceVariant
+                                                                .withOpacity(
+                                                                    0.8)),
+                                                      ),
+                                                      onChanged: (value) {
+                                                        final typedDisplay =
+                                                            double.tryParse(
+                                                                    value) ??
+                                                                0.0;
+                                                        final weightInKg = unit
+                                                            .toStorage(
+                                                                typedDisplay);
+                                                        exercise.sets[
+                                                            setIndex] = LoggedSet(
+                                                          weight: weightInKg,
+                                                          reps: set.reps,
+                                                          type: set.type,
+                                                          isCompleted:
+                                                              set.isCompleted,
+                                                        );
+                                                        _markDirty();
+                                                      },
+                                                    ),
+                                            ),
+                                          ),
+                                          Expanded(
+                                            child: Padding(
+                                              padding: const EdgeInsets
+                                                  .symmetric(horizontal: 4.0),
                                               child: TextFormField(
-                                                initialValue: set.reps == 0
-                                                    ? ''
-                                                    : set.reps.toString(),
+                                                controller: repsController,
+                                                textAlign: TextAlign.center,
                                                 keyboardType:
                                                     TextInputType.number,
-                                                decoration:
-                                                    const InputDecoration(
-                                                        border:
-                                                            OutlineInputBorder(),
-                                                        contentPadding:
-                                                            EdgeInsets
-                                                                .symmetric(
-                                                                    horizontal:
-                                                                        8,
-                                                                    vertical:
-                                                                        4),
-                                                        hintText: '0'),
+                                                style: TextStyle(
+                                                    fontWeight:
+                                                        FontWeight.w600,
+                                                    color: theme.colorScheme
+                                                        .onSurface),
+                                                decoration: InputDecoration(
+                                                  border: InputBorder.none,
+                                                  enabledBorder:
+                                                      InputBorder.none,
+                                                  focusedBorder:
+                                                      InputBorder.none,
+                                                  disabledBorder:
+                                                      InputBorder.none,
+                                                  errorBorder:
+                                                      InputBorder.none,
+                                                  focusedErrorBorder:
+                                                      InputBorder.none,
+                                                  contentPadding:
+                                                      const EdgeInsets
+                                                          .symmetric(
+                                                          horizontal: 8,
+                                                          vertical: 4),
+                                                  hintText: prevReps > 0
+                                                      ? '$prevReps'
+                                                      : '0',
+                                                  hintStyle: TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.normal,
+                                                      color: theme.colorScheme
+                                                          .onSurfaceVariant
+                                                          .withOpacity(0.8)),
+                                                ),
                                                 onChanged: (value) {
                                                   final newReps =
                                                       int.tryParse(value) ?? 0;
                                                   exercise.sets[setIndex] =
                                                       LoggedSet(
-                                                          weight: set.weight,
-                                                          reps: newReps);
+                                                    weight: set.weight,
+                                                    reps: newReps,
+                                                    type: set.type,
+                                                    isCompleted:
+                                                        set.isCompleted,
+                                                  );
                                                   _markDirty();
                                                 },
                                               ),
@@ -760,44 +1227,50 @@ class _WorkoutFormPageState extends State<WorkoutFormPage> {
                                     );
                                   }),
                                   const SizedBox(height: 10),
-                                  Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Expanded(
-                                        child: AppGhostButton(
-                                          label: 'Add Set',
-                                          icon: Icons.add,
-                                          onPressed: () {
-                                            setState(() {
-                                              final lastWeight = sets.isNotEmpty
-                                                  ? sets.last.weight
-                                                  : 0.0;
-                                              final lastReps = sets.isNotEmpty
-                                                  ? sets.last.reps
-                                                  : 0;
-                                              sets.add(LoggedSet(
-                                                  weight: lastWeight,
-                                                  reps: lastReps));
-                                            });
-                                            _markDirty();
-                                          },
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Expanded(
+                                          child: AppGhostButton(
+                                            label: 'Add Set',
+                                            icon: Icons.add,
+                                            onPressed: () {
+                                              setState(() {
+                                                final lastWeight =
+                                                    sets.isNotEmpty
+                                                        ? sets.last.weight
+                                                        : 0.0;
+                                                final lastReps = sets.isNotEmpty
+                                                    ? sets.last.reps
+                                                    : 0;
+                                                sets.add(LoggedSet(
+                                                    weight: lastWeight,
+                                                    reps: lastReps));
+                                              });
+                                              _markDirty();
+                                            },
+                                          ),
                                         ),
-                                      ),
-                                      if (sets.length > 1)
-                                        TextButton(
-                                          onPressed: () {
-                                            setState(() {
-                                              sets.removeLast();
-                                            });
-                                            _markDirty();
-                                          },
-                                          child: const Text('Remove Last Set',
-                                              style: TextStyle(
-                                                  color: Colors.redAccent)),
-                                        )
-                                    ],
-                                  )
+                                        if (sets.length > 1)
+                                          TextButton(
+                                            onPressed: () {
+                                              setState(() {
+                                                sets.removeLast();
+                                              });
+                                              _markDirty();
+                                            },
+                                            child: const Text(
+                                                'Remove Last Set',
+                                                style: TextStyle(
+                                                    color: Colors.redAccent)),
+                                          )
+                                      ],
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),

@@ -992,7 +992,7 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                                         activeExercises: _activeExercises);
 
                                     final hasHistory = prevWeightInKg > 0.0 || prevReps > 0;
-                                    String prevText = '-';
+                                    String prevText = '—';
 
                                     if (hasHistory) {
                                       if (isBodyWeight) {

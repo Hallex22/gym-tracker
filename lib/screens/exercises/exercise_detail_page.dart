@@ -44,6 +44,8 @@ class ExerciseDetailPage extends StatelessWidget {
     final unit = DatabaseService.globalUnit;
     final prs = StatsService.getPersonalRecords(exercise.id);
 
+    final history = StatsService.getExerciseHistory(exercise.id);
+
     return DefaultTabController(
       length: 3, // Cele 3 Tab-uri: About, Instructions, PRs
       child: Scaffold(
@@ -73,7 +75,7 @@ class ExerciseDetailPage extends StatelessWidget {
           children: [
             _buildAboutTab(context, theme),
             _buildInstructionsTab(theme),
-            _buildHistoryAndPRsTab(theme, prs, unit),
+            _buildHistoryAndPRsTab(theme, prs, unit, history),
           ],
         ),
       ),
@@ -272,16 +274,23 @@ class ExerciseDetailPage extends StatelessWidget {
   }
 
   // ==================== TAB 3: PERSONAL RECORDS ====================
-  Widget _buildHistoryAndPRsTab(ThemeData theme, ExercisePRs prs, UnitSystem unit) {
+  Widget _buildHistoryAndPRsTab(
+    ThemeData theme,
+    ExercisePRs prs,
+    UnitSystem unit,
+    List<MapEntry<WorkoutLog, LoggedExercise>> history,
+  ) {
     String formatValue(double valueInKg) {
       if (valueInKg == 0.0) return '—';
-
-      // Folosim metoda `convert` și `label` din UnitSystem
       final double displayValue = unit == UnitSystem.lbs ? valueInKg * 2.2046226218 : valueInKg;
-
       final formattedNum = displayValue % 1 == 0 ? displayValue.toStringAsFixed(0) : displayValue.toStringAsFixed(1);
-
       return '$formattedNum ${unit.label}';
+    }
+
+    // Funcție helper pentru formatarea datei într-un mod simplu (ex: "12 Oct 2023")
+    String formatDate(DateTime date) {
+      final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return '${date.day} ${months[date.month - 1]} ${date.year}';
     }
 
     return SingleChildScrollView(
@@ -300,7 +309,7 @@ class ExerciseDetailPage extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
-          // Grilă cu cele 4 Recorduri Personale cheie (PRs)
+          // Grila PR-uri
           GridView.count(
             crossAxisCount: 2,
             shrinkWrap: true,
@@ -310,64 +319,155 @@ class ExerciseDetailPage extends StatelessWidget {
             childAspectRatio: 1.4,
             children: [
               _buildPRCard(
-                theme: theme,
-                title: 'Heaviest Weight',
-                value: formatValue(prs.heaviestWeight),
-                icon: Icons.fitness_center_rounded,
-                color: Colors.redAccent,
-              ),
+                  theme: theme,
+                  title: 'Heaviest Weight',
+                  value: formatValue(prs.heaviestWeight),
+                  icon: Icons.fitness_center_rounded,
+                  color: Colors.redAccent),
               _buildPRCard(
-                theme: theme,
-                title: 'Best Est. 1RM',
-                value: formatValue(prs.best1RM),
-                icon: Icons.star_rounded,
-                color: Colors.amber,
-              ),
+                  theme: theme,
+                  title: 'Best Est. 1RM',
+                  value: formatValue(prs.best1RM),
+                  icon: Icons.star_rounded,
+                  color: Colors.amber),
               _buildPRCard(
-                theme: theme,
-                title: 'Best Set Volume',
-                value: formatValue(prs.bestSetVolume),
-                icon: Icons.view_headline_rounded,
-                color: Colors.blueAccent,
-              ),
+                  theme: theme,
+                  title: 'Best Set Volume',
+                  value: formatValue(prs.bestSetVolume),
+                  icon: Icons.view_headline_rounded,
+                  color: Colors.blueAccent),
               _buildPRCard(
-                theme: theme,
-                title: 'Best Session Vol.',
-                value: formatValue(prs.bestSessionVolume),
-                icon: Icons.analytics_rounded,
-                color: Colors.purpleAccent,
-              ),
+                  theme: theme,
+                  title: 'Best Session Vol.',
+                  value: formatValue(prs.bestSessionVolume),
+                  icon: Icons.analytics_rounded,
+                  color: Colors.purpleAccent),
             ],
           ),
 
           const SizedBox(height: 32),
-
-          // Secțiune dedicată istoricului recent
           Text(
             'Recent Performance',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
           ),
           const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: theme.colorScheme.outlineVariant.withOpacity(0.3)),
-            ),
-            child: const Row(
-              children: [
-                Icon(Icons.history_toggle_off_rounded, color: Colors.grey),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Workout history logs will appear here once you complete sessions with this exercise.',
-                    style: TextStyle(color: Colors.grey, fontSize: 13, height: 1.3),
+
+          // Verificăm dacă avem istoric sau afișăm placeholder-ul
+          if (history.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: theme.colorScheme.outlineVariant.withOpacity(0.3)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.history_toggle_off_rounded, color: Colors.grey),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Workout history logs will appear here once you complete sessions with this exercise.',
+                      style: TextStyle(color: Colors.grey, fontSize: 13, height: 1.3),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
+            )
+          else
+            // Construim lista de sesiuni trecute
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: history.length,
+              itemBuilder: (context, index) {
+                final entry = history[index];
+                final WorkoutLog log = entry.key;
+                final LoggedExercise loggedExercise = entry.value;
+
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  elevation: 0,
+                  color: theme.colorScheme.surfaceContainerLow,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(color: theme.colorScheme.outlineVariant.withOpacity(0.3)),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Capul cardului: Numele antrenamentului și Data
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                log.routineTitle,
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            Text(
+                              formatDate(log.startTime),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: theme.colorScheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Divider(height: 1, color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
+                        const SizedBox(height: 8),
+
+                        // Lista cu seturile efectuate în acea sesiune
+                        ListView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: loggedExercise.sets.length,
+                          itemBuilder: (context, setIndex) {
+                            final set = loggedExercise.sets[setIndex];
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 4.0),
+                              child: Row(
+                                children: [
+                                  // Indexul setului (ex: 1, 2, 3)
+                                  Container(
+                                    width: 20,
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      '${setIndex + 1}',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: theme.colorScheme.primary,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  // Greutatea x Repetările
+                                  Expanded(
+                                    child: Text(
+                                      '${formatValue(set.weight)}  ×  ${set.reps} reps',
+                                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                                    ),
+                                  ),
+                                  // Indicator vizual opțional dacă setul a fost de încălzire/drop etc. (dacă folosești enums pentru tipul de set)
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
             ),
-          ),
         ],
       ),
     );
