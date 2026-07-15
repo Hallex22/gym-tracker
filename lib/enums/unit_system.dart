@@ -20,4 +20,18 @@ enum UnitSystem {
     }
     return weightInDisplayUnit;
   }
+
+  String toFullDisplay(double weightInKg) {
+
+    return '${formatWeight(this.toDisplay(weightInKg))} ${this.label}';
+    // '${_formatWeight(_globalUnit.toDisplay(currentSnapshotLog.totalVolume))} ${_globalUnit.label}',
+
+  }
+
+  String formatWeight(double value) {
+    if (value == value.roundToDouble()) {
+      return value.toStringAsFixed(0);
+    }
+    return value.toStringAsFixed(1);
+  }
 }

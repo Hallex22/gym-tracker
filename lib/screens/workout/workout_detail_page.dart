@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:gym_tracker/enums/enums.dart'; // Asigură-te că importul conține UnitSystem
+import 'package:gym_tracker/models/app_settings.dart';
 import 'package:gym_tracker/utils/date_utils.dart';
 import 'package:gym_tracker/widgets/top_toast.dart';
 import '../../models/models.dart';
@@ -24,10 +26,23 @@ class WorkoutDetailPage extends StatefulWidget {
 class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
   late WorkoutLog _currentLog;
 
+  // 🆕 Unitatea de măsură globală
+  UnitSystem _globalUnit = UnitSystem.kg;
+
   @override
   void initState() {
     super.initState();
+    _loadUnitPreference();
     _currentLog = widget.log;
+  }
+
+  // 🆕 Încarcă unitatea preferată din setări
+  void _loadUnitPreference() {
+    final Map? rawSettings = DatabaseService.settingsBox.get('appSettings') as Map?;
+    final AppSettings settings = rawSettings != null ? AppSettings.fromMap(rawSettings) : const AppSettings();
+    setState(() {
+      _globalUnit = settings.unitSystem;
+    });
   }
 
   void _refreshLogData() {
@@ -39,14 +54,13 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
     }
   }
 
-// --- 💡 LOGICA DE CALCUL OPTIMIZATĂ PENTRU STRUCTURA MODELULUI TĂU ---
+// --- LOGICA DE CALCUL OPTIMIZATĂ PENTRU STRUCTURA MODELULUI TĂU ---
   Map<String, double> _calculateMuscleDistribution() {
     final Map<String, double> muscleScores = {};
     double totalScore = 0.0;
 
     for (var loggedExercise in _currentLog.exercises) {
-      final rawExerciseData =
-          DatabaseService.exercisesBox.get(loggedExercise.exerciseId);
+      final rawExerciseData = DatabaseService.exercisesBox.get(loggedExercise.exerciseId);
       if (rawExerciseData == null) continue;
 
       Exercise? exercise;
@@ -63,8 +77,7 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
 
       // 1. Procesăm mușchii primari (Pondere 100%)
       for (var target in exercise.primaryMuscles) {
-        final String name = target.group.name
-            .toUpperCase(); // Poți folosi și target.label dacă vrei detalii
+        final String name = target.group.name.toUpperCase();
         final double score = setsCount * 1.0;
         muscleScores[name] = (muscleScores[name] ?? 0.0) + score;
         totalScore += score;
@@ -90,29 +103,24 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
     if (totalScore == 0.0) return {};
 
     // Transformăm scorurile brute în procente (0.0 - 1.0) pentru UI
-    return muscleScores
-        .map((muscle, score) => MapEntry(muscle, score / totalScore));
+    return muscleScores.map((muscle, score) => MapEntry(muscle, score / totalScore));
   }
 
-  // --- WIDGET FINISAT PENTRU RELEASING REPEDE (ALINIAT ȘI CURAT) ---
+  // --- WIDGET FINISAT PENTRU RELEASING REPEDE ---
   Widget _buildMuscleDistributionSection(ThemeData theme) {
     final distribution = _calculateMuscleDistribution();
 
     if (distribution.isEmpty) return const SizedBox.shrink();
 
     // Sortăm descrescător după importanță
-    final sortedEntries = distribution.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
+    final sortedEntries = distribution.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'Muscle Group Split',
-          style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: theme.colorScheme.onSurfaceVariant),
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: theme.colorScheme.onSurfaceVariant),
         ),
         const SizedBox(height: 12),
         Card(
@@ -127,17 +135,14 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
               itemBuilder: (context, index) {
                 final entry = sortedEntries[index];
                 final percentage = entry.value;
-                final percentageString =
-                    '${(percentage * 100).toStringAsFixed(0)}%';
+                final percentageString = '${(percentage * 100).toStringAsFixed(0)}%';
 
-                // Înfrumusețăm textul din Enum (ex: "CHEST", "BICEPS", "LOWER_BACK")
                 final displayMuscleName = entry.key.replaceAll('_', ' ');
 
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 6.0),
                   child: Row(
                     children: [
-                      // Numele grupei musculare cu lungime fixă
                       SizedBox(
                         width: 100,
                         child: Text(
@@ -151,15 +156,13 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      // Bara nativă cu LinearProgressIndicator
                       Expanded(
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(4),
                           child: LinearProgressIndicator(
                             value: percentage,
                             minHeight: 10,
-                            backgroundColor:
-                                theme.colorScheme.surfaceContainerHighest,
+                            backgroundColor: theme.colorScheme.surfaceContainerHighest,
                             valueColor: AlwaysStoppedAnimation<Color>(
                               theme.colorScheme.primary.withOpacity(0.85),
                             ),
@@ -167,7 +170,6 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
                         ),
                       ),
                       const SizedBox(width: 12),
-                      // Procentul afișat în dreapta
                       SizedBox(
                         width: 35,
                         child: Text(
@@ -255,8 +257,7 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
       if (!context.mounted) return;
 
       Navigator.pop(context);
-      TopToast.show(context, 'Workout deleted successfully.',
-          type: ToastType.info);
+      TopToast.show(context, 'Workout deleted successfully.', type: ToastType.info);
     }
   }
 
@@ -285,21 +286,16 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
             // --- HEADER ---
             Text(
               _currentLog.routineTitle,
-              style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.onSurface),
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
             ),
             const SizedBox(height: 4),
             Row(
               children: [
-                Icon(Icons.calendar_today,
-                    size: 14, color: theme.colorScheme.onSurfaceVariant),
+                Icon(Icons.calendar_today, size: 14, color: theme.colorScheme.onSurfaceVariant),
                 const SizedBox(width: 6),
                 Text(
                   formattedDate,
-                  style: TextStyle(
-                      color: theme.colorScheme.onSurfaceVariant, fontSize: 14),
+                  style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 14),
                 ),
               ],
             ),
@@ -311,38 +307,29 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
               color: theme.cardColor.withOpacity(0.6),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
-                side: BorderSide(
-                    color: theme.colorScheme.primary.withOpacity(0.2)),
+                side: BorderSide(color: theme.colorScheme.primary.withOpacity(0.2)),
               ),
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    _buildStatItem(
-                        Icons.timer, _currentLog.formattedDuration, 'Duration'),
-                    _buildStatItem(
-                        Icons.fitness_center,
-                        '${_currentLog.totalVolume.toStringAsFixed(0)} kg',
-                        'Volume'),
-                    _buildStatItem(Icons.format_list_numbered,
-                        '${_currentLog.totalSetsCount}', 'Total Sets'),
+                    _buildStatItem(Icons.timer, _currentLog.formattedDuration, 'Duration'),
+                    // 💡 REPARAT: Folosim `toFullDisplay` pentru a afișa volumul în unitatea corectă (ex: "12,500 lbs" sau "5,400 kg")
+                    _buildStatItem(Icons.fitness_center, _globalUnit.toFullDisplay(_currentLog.totalVolume), 'Volume'),
+                    _buildStatItem(Icons.format_list_numbered, '${_currentLog.completedSetsCount}', 'Total Sets'),
                   ],
                 ),
               ),
             ),
             const SizedBox(height: 24),
 
-            // 💡 ACUM SE RANDAZĂ MINI-GRAFICUL DE DISTRIBUȚIE MUSCULARĂ
             _buildMuscleDistributionSection(theme),
 
             // --- LISTA DE EXERCIȚII EFECTUATE ---
             Text(
               'Exercises & Sets',
-              style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: theme.colorScheme.onSurfaceVariant),
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: theme.colorScheme.onSurfaceVariant),
             ),
             const SizedBox(height: 12),
 
@@ -350,8 +337,7 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
               const Center(
                 child: Padding(
                   padding: EdgeInsets.symmetric(vertical: 20.0),
-                  child: Text('No exercises recorded in this session.',
-                      style: TextStyle(color: Colors.grey)),
+                  child: Text('No exercises recorded in this session.', style: TextStyle(color: Colors.grey)),
                 ),
               )
             else
@@ -361,8 +347,7 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
                 itemCount: _currentLog.exercises.length,
                 itemBuilder: (context, exIndex) {
                   final loggedExercise = _currentLog.exercises[exIndex];
-                  final rawExerciseData = DatabaseService.exercisesBox
-                      .get(loggedExercise.exerciseId);
+                  final rawExerciseData = DatabaseService.exercisesBox.get(loggedExercise.exerciseId);
 
                   Exercise? fullExercise;
                   String exerciseName = 'Unknown Exercise';
@@ -378,8 +363,7 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
                     coverImage = fullExercise.coverImage;
                   }
 
-                  final isImageEmpty =
-                      coverImage == null || coverImage.trim().isEmpty;
+                  final isImageEmpty = coverImage == null || coverImage.trim().isEmpty;
 
                   return Card(
                     margin: const EdgeInsets.only(bottom: 14),
@@ -395,30 +379,24 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (context) => ExerciseDetailPage(
-                                        exercise: fullExercise!),
+                                    builder: (context) => ExerciseDetailPage(exercise: fullExercise!),
                                   ),
                                 );
                               }
                             },
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                  vertical: 4.0, horizontal: 2.0),
+                              padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 2.0),
                               child: Row(
                                 children: [
                                   CircleAvatar(
                                     radius: 20,
-                                    backgroundColor: theme
-                                        .colorScheme.surfaceContainerHighest,
-                                    backgroundImage: !isImageEmpty
-                                        ? AssetImage('assets/$coverImage')
-                                        : null,
+                                    backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                                    backgroundImage: !isImageEmpty ? AssetImage('assets/$coverImage') : null,
                                     child: isImageEmpty
                                         ? Icon(
                                             Icons.image_not_supported,
                                             size: 14,
-                                            color: theme
-                                                .colorScheme.onSurfaceVariant,
+                                            color: theme.colorScheme.onSurfaceVariant,
                                           )
                                         : null,
                                   ),
@@ -434,8 +412,7 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
                                   ),
                                   Icon(
                                     Icons.chevron_right,
-                                    color: theme.colorScheme.onSurfaceVariant
-                                        .withOpacity(0.5),
+                                    color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5),
                                     size: 18,
                                   ),
                                 ],
@@ -450,38 +427,39 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
                             int setIdx = entry.key;
                             final set = entry.value;
 
+                            // 💡 REPARAT: Convertim greutatea brută (stocată în kg) la afișare pe baza preferinței de unitate
+                            final double displayWeight =
+                                _globalUnit == UnitSystem.lbs ? set.weight * 2.2046226218 : set.weight;
+
+                            // Volumul total pe set în unitatea corectă
+                            final double displayVolume = displayWeight * set.reps;
+
                             return Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 4.0),
+                              padding: const EdgeInsets.symmetric(vertical: 4.0),
                               child: Row(
                                 children: [
                                   CircleAvatar(
                                     radius: 10,
-                                    backgroundColor: theme.colorScheme.primary
-                                        .withOpacity(0.2),
+                                    backgroundColor: theme.colorScheme.primary.withOpacity(0.2),
                                     child: Text(
                                       '${setIdx + 1}',
-                                      style: TextStyle(
-                                          fontSize: 11,
-                                          color: theme.hintColor,
-                                          fontWeight: FontWeight.bold),
+                                      style:
+                                          TextStyle(fontSize: 11, color: theme.hintColor, fontWeight: FontWeight.bold),
                                     ),
                                   ),
                                   const SizedBox(width: 16),
-                                  Text('${set.weight} kg',
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.w500)),
-                                  const Text('  ×  ',
-                                      style: TextStyle(color: Colors.grey)),
-                                  Text('${set.reps} reps',
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.w500)),
-                                  const Spacer(),
+                                  // Afișăm greutatea formatată corespunzător
                                   Text(
-                                    '${(set.weight * set.reps).toStringAsFixed(0)} kg',
-                                    style: TextStyle(
-                                        color: Colors.grey.shade500,
-                                        fontSize: 13),
+                                    '${displayWeight.toStringAsFixed(displayWeight % 1 == 0 ? 0 : 1)} ${_globalUnit.label}',
+                                    style: const TextStyle(fontWeight: FontWeight.w500),
+                                  ),
+                                  const Text('  ×  ', style: TextStyle(color: Colors.grey)),
+                                  Text('${set.reps} reps', style: const TextStyle(fontWeight: FontWeight.w500)),
+                                  const Spacer(),
+                                  // Afișăm volumul setului formatat și el corespunzător unității active
+                                  Text(
+                                    '${displayVolume.toStringAsFixed(0)} ${_globalUnit.label}',
+                                    style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
                                   )
                                 ],
                               ),
@@ -506,17 +484,12 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
         const SizedBox(height: 6),
         Text(
           value,
-          style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.onSurface),
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),
         ),
         const SizedBox(height: 2),
         Text(
           label,
-          style: TextStyle(
-              fontSize: 12,
-              color: Theme.of(context).colorScheme.onSurfaceVariant),
+          style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
         ),
       ],
     );

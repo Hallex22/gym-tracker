@@ -74,17 +74,11 @@ class _CalendarPageState extends State<CalendarPage> {
         centerTitle: true,
         actions: [
           IconButton(
-            icon: Icon(_viewMode == CalendarViewMode.month
-                ? Icons.grid_view_rounded
-                : Icons.calendar_month_outlined),
-            tooltip: _viewMode == CalendarViewMode.month
-                ? 'Switch to Year View'
-                : 'Switch to Month View',
+            icon: Icon(_viewMode == CalendarViewMode.month ? Icons.grid_view_rounded : Icons.calendar_month_outlined),
+            tooltip: _viewMode == CalendarViewMode.month ? 'Switch to Year View' : 'Switch to Month View',
             onPressed: () {
               setState(() {
-                _viewMode = _viewMode == CalendarViewMode.month
-                    ? CalendarViewMode.year
-                    : CalendarViewMode.month;
+                _viewMode = _viewMode == CalendarViewMode.month ? CalendarViewMode.year : CalendarViewMode.month;
               });
             },
           ),
@@ -94,36 +88,26 @@ class _CalendarPageState extends State<CalendarPage> {
         children: [
           // --- COMPONENTA DE CALENDAR (MONTH / YEAR) ---
           Expanded(
-            flex: _viewMode == CalendarViewMode.month
-                ? 0
-                : 3, // Îi dăm spațiu heatmap-ului să se întindă pe ecran
+            flex: _viewMode == CalendarViewMode.month ? 0 : 3, // Îi dăm spațiu heatmap-ului să se întindă pe ecran
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 250),
               child: _viewMode == CalendarViewMode.month
                   ? _buildMonthCalendar(theme)
-                  : _buildYearVerticalHeatmap(
-                      theme), // Noua grilă în stil Heavy
+                  : _buildYearVerticalHeatmap(theme), // Noua grilă în stil Heavy
             ),
           ),
 
           const SizedBox(height: 8),
-          Divider(
-              color: theme.colorScheme.primary.withOpacity(0.2),
-              indent: 16,
-              endIndent: 16),
+          Divider(color: theme.colorScheme.primary.withOpacity(0.2), indent: 16, endIndent: 16),
 
           // --- SECȚIUNEA DETALII ANTRENAMENTE ZI SELECTATĂ ---
           Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
             child: Align(
               alignment: Alignment.centerLeft,
               child: Text(
                 'Workouts on ${_selectedDay!.day}/${_selectedDay!.month}/${_selectedDay!.year}',
-                style: TextStyle(
-                    fontSize: 12,
-                    color: theme.colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.bold),
+                style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant, fontWeight: FontWeight.bold),
               ),
             ),
           ),
@@ -134,15 +118,12 @@ class _CalendarPageState extends State<CalendarPage> {
                 ? Center(
                     child: Text(
                       'No workouts recorded for this day. 🛌',
-                      style: TextStyle(
-                          color: theme.colorScheme.onSurfaceVariant,
-                          fontSize: 14),
+                      style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 14),
                     ),
                   )
                 : ListView.builder(
                     itemCount: selectedEvents.length,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                     itemBuilder: (context, index) {
                       final workout = selectedEvents[index] as WorkoutLog;
 
@@ -152,27 +133,20 @@ class _CalendarPageState extends State<CalendarPage> {
                         color: theme.colorScheme.surfaceContainerLow,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
-                          side: BorderSide(
-                              color: theme.colorScheme.outlineVariant
-                                  .withOpacity(0.3)),
+                          side: BorderSide(color: theme.colorScheme.outlineVariant.withOpacity(0.3)),
                         ),
                         child: ListTile(
                           leading: CircleAvatar(
-                            backgroundColor:
-                                theme.colorScheme.primary.withOpacity(0.1),
-                            child: Icon(Icons.fitness_center,
-                                color: theme.colorScheme.primary, size: 20),
+                            backgroundColor: theme.colorScheme.primary.withOpacity(0.1),
+                            child: Icon(Icons.fitness_center, color: theme.colorScheme.primary, size: 20),
                           ),
                           title: Text(
                             workout.routineTitle,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 15),
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                           ),
                           subtitle: Text(
                             '${workout.exercises.length} Exercises completed',
-                            style: TextStyle(
-                                fontSize: 12,
-                                color: theme.colorScheme.onSurfaceVariant),
+                            style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
                           ),
                           trailing: const Icon(Icons.chevron_right, size: 20),
                           onTap: () {
@@ -180,10 +154,8 @@ class _CalendarPageState extends State<CalendarPage> {
                             dynamic correctLogKey;
 
                             for (var entry in DatabaseService.logsBox.toMap().entries) {
-                              final dbLog =
-                                  WorkoutLog.fromMap(entry.value as Map);
-                              if (dbLog.startTime.millisecondsSinceEpoch ==
-                                  workout.startTime.millisecondsSinceEpoch) {
+                              final dbLog = WorkoutLog.fromMap(entry.value as Map);
+                              if (dbLog.startTime.millisecondsSinceEpoch == workout.startTime.millisecondsSinceEpoch) {
                                 correctLogKey = entry.key;
                                 break;
                               }
@@ -257,8 +229,7 @@ class _CalendarPageState extends State<CalendarPage> {
           border: Border.all(color: theme.colorScheme.primary.withOpacity(0.5)),
           borderRadius: BorderRadius.circular(12),
         ),
-        formatButtonTextStyle: TextStyle(
-            color: theme.colorScheme.primary, fontWeight: FontWeight.bold),
+        formatButtonTextStyle: TextStyle(color: theme.colorScheme.primary, fontWeight: FontWeight.bold),
         titleCentered: true,
       ),
     );
@@ -294,10 +265,7 @@ class _CalendarPageState extends State<CalendarPage> {
           children: [
             Text(
               monthName,
-              style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.primary),
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: theme.colorScheme.primary),
             ),
             const SizedBox(height: 6),
             Expanded(
@@ -322,11 +290,9 @@ class _CalendarPageState extends State<CalendarPage> {
 
                   final workouts = _getWorkoutsForDay(currentCheckDay);
                   final bool hasWorkout = workouts.isNotEmpty;
-                  final bool isSelected =
-                      isSameDay(_selectedDay, currentCheckDay);
+                  final bool isSelected = isSameDay(_selectedDay, currentCheckDay);
 
-                  Color boxColor = theme.colorScheme.surfaceContainerHighest
-                      .withOpacity(0.3);
+                  Color boxColor = theme.colorScheme.onSurfaceVariant.withOpacity(0.15);
                   if (hasWorkout) {
                     boxColor = theme.colorScheme.primary;
                   }
@@ -344,9 +310,7 @@ class _CalendarPageState extends State<CalendarPage> {
                         color: boxColor,
                         borderRadius: BorderRadius.circular(2),
                         border: Border.all(
-                          color: isSelected
-                              ? theme.colorScheme.secondary
-                              : Colors.transparent,
+                          color: isSelected ? theme.colorScheme.secondary : Colors.transparent,
                           width: 1.0,
                         ),
                       ),
@@ -362,20 +326,7 @@ class _CalendarPageState extends State<CalendarPage> {
   }
 
   String _getMonthName(int month) {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec'
-    ];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return months[month - 1];
   }
 }

@@ -85,28 +85,45 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
 
   // Drawer-ul de selectie a tipului de set, deschis la tap pe eticheta setului.
   void _showSetTypeSheet(LoggedExercise exercise, int setIndex, LoggedSet currentSet) {
-    AppActionsSheet.show(
-      context: context,
-      title: 'Set Type',
-      subtitle: 'Mark set #${setIndex + 1} as...',
-      actions: SetType.values.map((type) {
-        return SheetActionItem(
-          icon: type.icon,
-          label: type.label,
-          color: type == currentSet.type ? Theme.of(context).colorScheme.primary : null,
+    final List<SheetActionItem> actions = SetType.values.map((type) {
+      return SheetActionItem(
+        icon: type.icon,
+        label: type.label,
+        color: type == currentSet.type ? Theme.of(context).colorScheme.primary : null,
+        onPressed: () {
+          setState(() {
+            exercise.sets[setIndex] = LoggedSet(
+              weight: currentSet.weight,
+              reps: currentSet.reps,
+              type: type,
+              isCompleted: currentSet.isCompleted,
+            );
+          });
+          _updateLiveProgress();
+        },
+      );
+    }).toList();
+
+    if (exercise.sets.length > 1) {
+      actions.add(
+        SheetActionItem(
+          icon: Icons.delete_sweep_outlined, // O iconiță sugestivă de ștergere
+          label: 'Delete Set #${setIndex + 1}',
+          color: Colors.redAccent, // Culoare roșie pentru a avertiza că este o acțiune distructivă
           onPressed: () {
             setState(() {
-              exercise.sets[setIndex] = LoggedSet(
-                weight: currentSet.weight,
-                reps: currentSet.reps,
-                type: type,
-                isCompleted: currentSet.isCompleted,
-              );
+              exercise.sets.removeAt(setIndex);
             });
             _updateLiveProgress();
           },
-        );
-      }).toList(),
+        ),
+      );
+    }
+    AppActionsSheet.show(
+      context: context,
+      title: 'Set Options',
+      subtitle: 'Manage set #${setIndex + 1}',
+      actions: actions,
     );
   }
 
@@ -152,9 +169,11 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
       for (var routineExercise in widget.routine.exercises) {
         final exerciseId = routineExercise.exerciseId;
         final targetSets = routineExercise.targetSetsCount > 0 ? routineExercise.targetSetsCount : 1;
-        final initialSets = List<LoggedSet>.generate(targetSets, (index) {
-          return const LoggedSet(weight: 0.0, reps: 0);
-        });
+        final initialSets = List<LoggedSet>.generate(
+          targetSets,
+          (index) => const LoggedSet(weight: 0.0, reps: 0),
+          growable: true,
+        );
 
         _activeExercises.add(
           LoggedExercise(
@@ -783,6 +802,29 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                                               subtitle: 'Manage active exercise session',
                                               actions: [
                                                 SheetActionItem(
+                                                  icon: SetType.warmup.icon,
+                                                  label: 'Add Warmup Set',
+                                                  onPressed: () {
+                                                    setState(() {
+                                                      // Preluăm prima valoare existentă ca punct de pornire, sau 0.0 / 0 dacă lista e goală
+                                                      double firstWeight = sets.isNotEmpty ? sets.first.weight : 0.0;
+                                                      int firstReps = sets.isNotEmpty ? sets.first.reps : 0;
+
+                                                      // Inserăm setul de warmup direct la indexul 0 (la începutul listei)
+                                                      sets.insert(
+                                                        0,
+                                                        LoggedSet(
+                                                          weight: firstWeight,
+                                                          reps: firstReps,
+                                                          type: SetType.warmup, // Forțăm tipul de warmup
+                                                          isCompleted: false,
+                                                        ),
+                                                      );
+                                                    });
+                                                    _updateLiveProgress();
+                                                  },
+                                                ),
+                                                SheetActionItem(
                                                   icon: Icons.info_outline,
                                                   label: 'View Exercise Details',
                                                   onPressed: () {
@@ -962,7 +1004,7 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                                     }
 
                                     return Container(
-                                      color: rowColor,
+                                      color: set.type == SetType.normal ? rowColor : null,
                                       margin: const EdgeInsets.symmetric(vertical: 1.0),
                                       padding: const EdgeInsets.symmetric(vertical: 1.0, horizontal: 0),
                                       decoration: set.type != SetType.normal
@@ -992,21 +1034,13 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                                                 child: Column(
                                                   mainAxisSize: MainAxisSize.min,
                                                   children: [
-                                                    Text('${setIndex + 1}',
-                                                        style: TextStyle(
+                                                    Text(
+                                                      set.type != SetType.normal ? set.type.shortLabel : '${setIndex + 1}',
+                                                      style: TextStyle(
                                                           fontSize: 16,
                                                           fontWeight: FontWeight.bold,
                                                           color: set.type.color ?? theme.colorScheme.onSurface,
                                                         )),
-                                                    if (set.type != SetType.normal)
-                                                      Text(
-                                                        set.type.shortLabel,
-                                                        style: TextStyle(
-                                                          fontSize: 8,
-                                                          fontWeight: FontWeight.bold,
-                                                          color: set.type.color ?? theme.colorScheme.primary,
-                                                        ),
-                                                      ),
                                                   ],
                                                 ),
                                               ),

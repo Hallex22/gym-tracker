@@ -15,11 +15,14 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   late Box _settingsBox;
-  
+
   // Obiectul local care va ține starea setărilor active
   late AppSettings _currentSettings;
 
   final TextEditingController _weightController = TextEditingController();
+
+  // Factor de conversie standard
+  static const double _kgToLbsFactor = 2.2046226218;
 
   @override
   void initState() {
@@ -28,15 +31,27 @@ class _SettingsPageState extends State<SettingsPage> {
     _loadSettings();
   }
 
+  // Încarcă setările și face conversia greutății salvate în kg pentru afișarea în UI
   void _loadSettings() {
     final Map? rawSettings = _settingsBox.get('appSettings') as Map?;
     setState(() {
-      _currentSettings = rawSettings != null
-          ? AppSettings.fromMap(rawSettings)
-          : const AppSettings(); // Valori default din clasă
+      _currentSettings =
+          rawSettings != null ? AppSettings.fromMap(rawSettings) : const AppSettings(); // Valori default din clasă
 
-      _weightController.text = _currentSettings.bodyWeight.toStringAsFixed(1);
+      _updateWeightControllerValue(_currentSettings);
     });
+  }
+
+  // Actualizează textul din controller în funcție de unitatea de măsură curentă
+  void _updateWeightControllerValue(AppSettings settings) {
+    if (settings.unitSystem == UnitSystem.lbs) {
+      // Afișăm în lbs
+      final double weightInLbs = settings.bodyWeight * _kgToLbsFactor;
+      _weightController.text = weightInLbs.toStringAsFixed(1);
+    } else {
+      // Afișăm în kg
+      _weightController.text = settings.bodyWeight.toStringAsFixed(1);
+    }
   }
 
   // Funcție centralizată care salvează tot obiectul modificat în Hive
@@ -115,7 +130,7 @@ class _SettingsPageState extends State<SettingsPage> {
                             unitSystem: _currentSettings.unitSystem,
                             bodyWeight: _currentSettings.bodyWeight,
                             enableSoundEffects: _currentSettings.enableSoundEffects,
-                            theme: newTheme, // Noua temă
+                            theme: newTheme,
                           ),
                         );
                       }
@@ -173,14 +188,16 @@ class _SettingsPageState extends State<SettingsPage> {
                     ],
                     onChanged: (UnitSystem? newUnit) {
                       if (newUnit != null) {
-                        _saveSettings(
-                          AppSettings(
-                            unitSystem: newUnit, // Noua unitate de măsură
-                            bodyWeight: _currentSettings.bodyWeight,
-                            enableSoundEffects: _currentSettings.enableSoundEffects,
-                            theme: _currentSettings.theme,
-                          ),
+                        // Când se schimbă unitatea, salvăm preferința, dar păstrăm greutatea corpului neschimbată în fundal (în kg).
+                        final AppSettings updatedSettings = AppSettings(
+                          unitSystem: newUnit,
+                          bodyWeight: _currentSettings.bodyWeight,
+                          enableSoundEffects: _currentSettings.enableSoundEffects,
+                          theme: _currentSettings.theme,
                         );
+                        _saveSettings(updatedSettings);
+                        // Recalculăm valoarea textului din căsuța de greutate pe baza noii unități selectate
+                        _updateWeightControllerValue(updatedSettings);
                       }
                     },
                   ),
@@ -241,16 +258,25 @@ class _SettingsPageState extends State<SettingsPage> {
                             decoration: InputDecoration(
                               isDense: true,
                               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              hintText: 'e.g. 75.0',
+                              hintText: _currentSettings.unitSystem == UnitSystem.lbs ? 'e.g. 165.0' : 'e.g. 75.0',
                               hintStyle: TextStyle(color: context.textMuted),
                             ),
                             onChanged: (val) {
-                              final double? parsedWeight = double.tryParse(val);
-                              if (parsedWeight != null && parsedWeight > 0) {
+                              final double? parsedInputValue = double.tryParse(val);
+                              if (parsedInputValue != null && parsedInputValue > 0) {
+                                double weightInKg;
+
+                                // 💡 Dacă suntem în lbs, facem conversia valorii introduse în kg înainte de salvare!
+                                if (_currentSettings.unitSystem == UnitSystem.lbs) {
+                                  weightInKg = parsedInputValue / _kgToLbsFactor;
+                                } else {
+                                  weightInKg = parsedInputValue;
+                                }
+
                                 _saveSettings(
                                   AppSettings(
                                     unitSystem: _currentSettings.unitSystem,
-                                    bodyWeight: parsedWeight, // Noua greutate
+                                    bodyWeight: weightInKg, // Salvat permanent în KG în baza de date!
                                     enableSoundEffects: _currentSettings.enableSoundEffects,
                                     theme: _currentSettings.theme,
                                   ),
@@ -308,7 +334,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   AppSettings(
                     unitSystem: _currentSettings.unitSystem,
                     bodyWeight: _currentSettings.bodyWeight,
-                    enableSoundEffects: value, // Noua stare a sunetului
+                    enableSoundEffects: value,
                     theme: _currentSettings.theme,
                   ),
                 );

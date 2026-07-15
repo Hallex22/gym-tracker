@@ -5,6 +5,9 @@ import 'package:hive_ce/hive.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:gym_tracker/models/models.dart';
 
+import '../enums/enums.dart';
+import '../models/app_settings.dart';
+
 class DatabaseService {
   // Box-urile globale expuse ca proprietăți statice
   static late Box exercisesBox;
@@ -22,8 +25,7 @@ class DatabaseService {
     exercisesBox = await Hive.openBox('exercises');
     routinesBox = await Hive.openBox('routines');
     logsBox = await Hive.openBox('workout_logs');
-    routineFoldersBox =
-        await Hive.openBox('routine_folders'); // Adăugat pentru foldere
+    routineFoldersBox = await Hive.openBox('routine_folders'); // Adăugat pentru foldere
     settingsBox = await Hive.openBox('settings');
 
     // Executăm popularea inițială dacă este nevoie
@@ -37,8 +39,7 @@ class DatabaseService {
   static Future<void> _seedDatabaseFromJsonIfNeeded() async {
     if (exercisesBox.isEmpty) {
       try {
-        final String jsonString =
-            await rootBundle.loadString('assets/exercises_init.json');
+        final String jsonString = await rootBundle.loadString('assets/exercises_init.json');
         final List<dynamic> jsonList = jsonDecode(jsonString);
 
         for (var item in jsonList) {
@@ -70,8 +71,18 @@ class DatabaseService {
       }
 
       await routineFoldersBox.put(defaultFolder.id, defaultFolder.toMap());
-      debugPrint(
-          '🚀 [Migration] Rutinele din v1.1.0 au fost mutate în folderul implicit!');
+      debugPrint('🚀 [Migration] Rutinele din v1.1.0 au fost mutate în folderul implicit!');
     }
+  }
+
+  // Utilitare
+  static UnitSystem get globalUnit {
+    if (!settingsBox.isOpen) return UnitSystem.kg; // Fallback de siguranță
+
+    final Map? rawSettings = settingsBox.get('appSettings') as Map?;
+    if (rawSettings == null) return UnitSystem.kg;
+
+    final settings = AppSettings.fromMap(rawSettings);
+    return settings.unitSystem;
   }
 }

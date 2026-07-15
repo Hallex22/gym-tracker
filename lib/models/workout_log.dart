@@ -66,14 +66,16 @@ class LoggedExercise {
   double get exerciseVolume {
     double volume = 0;
     for (var set in sets) {
-      volume += set.setVolume;
+      if (set.type != SetType.warmup) {
+        volume += set.setVolume;
+      }
     }
     return volume;
   }
 
   int get completedSetsCount {
     int count = 0;
-    count += sets.where((s) => s.reps > 0).length;
+    count += sets.where((set) => set.reps > 0 && set.type != SetType.warmup).length;
     return count;
   }
 
@@ -123,12 +125,9 @@ class WorkoutLog {
 
     return WorkoutLog(
       startTime: DateTime.parse(map['startTime'] as String),
-      endTime: map['endTime'] != null
-          ? DateTime.parse(map['endTime'] as String)
-          : null,
+      endTime: map['endTime'] != null ? DateTime.parse(map['endTime'] as String) : null,
       routineTitle: map['routineTitle'] as String,
-      exercises:
-          rawExercises.map((e) => LoggedExercise.fromMap(e as Map)).toList(),
+      exercises: rawExercises.map((e) => LoggedExercise.fromMap(e as Map)).toList(),
       status: WorkoutStatus.values.firstWhere(
         (e) => e.name == map['status'],
         orElse: () => WorkoutStatus.started,

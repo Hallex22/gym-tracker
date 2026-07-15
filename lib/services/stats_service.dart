@@ -8,9 +8,7 @@ class StatsService {
     final rawLogs = DatabaseService.logsBox.values;
     if (rawLogs.isEmpty) return 0;
 
-    final List<DateTime> workoutDates = rawLogs
-        .map((logMap) => WorkoutLog.fromMap(logMap as Map).startTime)
-        .toList();
+    final List<DateTime> workoutDates = rawLogs.map((logMap) => WorkoutLog.fromMap(logMap as Map).startTime).toList();
 
     if (workoutDates.isEmpty) return 0;
 
@@ -22,20 +20,16 @@ class StatsService {
       return DateTime(monday.year, monday.month, monday.day);
     }).toSet();
 
-    final List<DateTime> sortedWeeks = workoutWeeks.toList()
-      ..sort((a, b) => b.compareTo(a));
+    final List<DateTime> sortedWeeks = workoutWeeks.toList()..sort((a, b) => b.compareTo(a));
 
     if (sortedWeeks.isEmpty) return 0;
 
     final now = DateTime.now();
-    final currentWeekMonday = DateTime(now.year, now.month, now.day)
-        .subtract(Duration(days: now.weekday - 1));
-    final currentWeekMondayDate = DateTime(
-        currentWeekMonday.year, currentWeekMonday.month, currentWeekMonday.day);
+    final currentWeekMonday = DateTime(now.year, now.month, now.day).subtract(Duration(days: now.weekday - 1));
+    final currentWeekMondayDate = DateTime(currentWeekMonday.year, currentWeekMonday.month, currentWeekMonday.day);
 
     final lastWorkoutWeek = sortedWeeks.first;
-    final differenceInDays =
-        currentWeekMondayDate.difference(lastWorkoutWeek).inDays;
+    final differenceInDays = currentWeekMondayDate.difference(lastWorkoutWeek).inDays;
 
     if (differenceInDays > 7) {
       return 0;
@@ -63,14 +57,12 @@ class StatsService {
     final now = DateTime.now();
     // Găsim Lunea din săptămâna curentă la ora 00:00:00
     final daysToSubtract = now.weekday - 1;
-    final mondayThisWeek = DateTime(now.year, now.month, now.day)
-        .subtract(Duration(days: daysToSubtract));
+    final mondayThisWeek = DateTime(now.year, now.month, now.day).subtract(Duration(days: daysToSubtract));
 
     // Verificăm dacă există vreun antrenament început după Luni, ora 00:00
     return rawLogs.any((logMap) {
       final log = WorkoutLog.fromMap(logMap as Map);
-      return log.startTime.isAfter(mondayThisWeek) ||
-          log.startTime.isAtSameMomentAs(mondayThisWeek);
+      return log.startTime.isAfter(mondayThisWeek) || log.startTime.isAtSameMomentAs(mondayThisWeek);
     });
   }
 
@@ -89,14 +81,11 @@ class StatsService {
           return logB.startTime.compareTo(logA.startTime);
         });
 
-      final bool isCurrentWarmup = currentType == SetType.warmup;
-
       for (var rawLog in logs) {
         final log = WorkoutLog.fromMap(rawLog as Map);
 
         // 🔧 FIX: Tratăm ambele cazuri de "started" (dacă starea e enum sau String)
-        final isStarted = log.status == WorkoutStatus.started ||
-            log.status.toString().contains('started');
+        final isStarted = log.status == WorkoutStatus.started || log.status.toString().contains('started');
         if (isStarted) continue;
 
         final exercise = log.exercises.firstWhere(
@@ -105,25 +94,21 @@ class StatsService {
         );
 
         if (exercise != null) {
-          // 🚀 CURĂȚARE: Nu mai mapăm/convertim nimic. Facem doar cast direct la List<LoggedSet>
+          // 🚀 CURĂȚARE: Facem cast direct la List<LoggedSet>
           final List<LoggedSet> pastSets = List<LoggedSet>.from(exercise.sets);
 
-          final matchingPastSets = pastSets
-              .where((s) => (s.type == SetType.warmup) == isCurrentWarmup)
-              .toList();
+          // 🎯 MODIFICARE: Filtrăm strict după tipul de set curent (Normal, Warmup, Drop, Failure etc.)
+          final matchingPastSets = pastSets.where((s) => s.type == currentType).toList();
 
-          final currentEx =
-              activeExercises.firstWhere((ex) => ex.exerciseId == exerciseId);
+          final currentEx = activeExercises.firstWhere((ex) => ex.exerciseId == exerciseId);
 
           // 🚀 CURĂȚARE: Facem cast direct și aici pentru siguranță
-          final List<LoggedSet> currentSets =
-              List<LoggedSet>.from(currentEx.sets);
+          final List<LoggedSet> currentSets = List<LoggedSet>.from(currentEx.sets);
 
-          final relativeCategoryIndex = currentSets
-              .sublist(0, setIndex)
-              .where((s) => (s.type == SetType.warmup) == isCurrentWarmup)
-              .length;
+          // 🎯 MODIFICARE: Calculăm al câtelea set de ACEST TIP exact este cel curent din listă
+          final relativeCategoryIndex = currentSets.sublist(0, setIndex).where((s) => s.type == currentType).length;
 
+          // Dacă în trecut aveam cel puțin atâtea seturi de acest tip, returnăm valorile corespunzătoare
           if (matchingPastSets.length > relativeCategoryIndex) {
             final prevSet = matchingPastSets[relativeCategoryIndex];
             return (prevSet.weight, prevSet.reps);
@@ -135,4 +120,86 @@ class StatsService {
     }
     return (0.0, 0); // Valoare implicită dacă nu găsește nimic
   }
+
+  static ExercisePRs getPersonalRecords(int exerciseId) {
+    if (!DatabaseService.logsBox.isOpen) return const ExercisePRs();
+
+    double heaviestWeight = 0.0;
+    double best1RM = 0.0;
+    double bestSetVolume = 0.0;
+    double bestSessionVolume = 0.0;
+
+    // Iterăm prin toate logurile salvate în Hive
+    for (var value in DatabaseService.logsBox.values) {
+      final log = WorkoutLog.fromMap(value as Map);
+
+      // Ne interesează doar antrenamentele finalizate cu succes
+      if (log.status != WorkoutStatus.finished) continue;
+
+      double currentSessionExerciseVolume = 0.0;
+      bool exerciseFoundInSession = false;
+
+      for (var loggedExercise in log.exercises) {
+        if (loggedExercise.exerciseId != exerciseId) continue;
+
+        exerciseFoundInSession = true;
+
+        for (var set in loggedExercise.sets) {
+          final double weight = set.weight;
+          final int reps = set.reps;
+
+          if (reps <= 0) continue;
+
+          // 1. Heaviest Weight
+          if (weight > heaviestWeight) {
+            heaviestWeight = weight;
+          }
+
+          // 2. Best Set Volume (Greutate x Repetări pe un singur set)
+          final double setVolume = weight * reps;
+          if (setVolume > bestSetVolume) {
+            bestSetVolume = setVolume;
+          }
+
+          // 3. Best Estimated 1RM (Formula Epley)
+          // 1RM se calculează doar dacă reps > 1 (pentru 1 rep, 1RM este chiar greutatea respectivă)
+          double estimated1RM = reps == 1 ? weight : weight * (1 + reps / 30.0);
+
+          if (estimated1RM > best1RM) {
+            best1RM = estimated1RM;
+          }
+
+          // Adunăm volumul pentru sesiunea curentă a acestui exercițiu
+          currentSessionExerciseVolume += setVolume;
+        }
+      }
+
+      // 4. Best Session Volume (Volumul total pe acest exercițiu dintr-un workout complet)
+      if (exerciseFoundInSession && currentSessionExerciseVolume > bestSessionVolume) {
+        bestSessionVolume = currentSessionExerciseVolume;
+      }
+    }
+
+    return ExercisePRs(
+      heaviestWeight: heaviestWeight,
+      best1RM: best1RM,
+      bestSetVolume: bestSetVolume,
+      bestSessionVolume: bestSessionVolume,
+    );
+  }
+}
+
+// Ceva
+class ExercisePRs {
+  final double heaviestWeight; // în kg (baza de date)
+  final double best1RM; // în kg
+  final double bestSetVolume; // în kg
+  final double bestSessionVolume; // în kg
+
+  const ExercisePRs({
+    this.heaviestWeight = 0.0,
+    this.best1RM = 0.0,
+    this.bestSetVolume = 0.0,
+    this.bestSessionVolume = 0.0,
+  });
 }

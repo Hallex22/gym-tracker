@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:gym_tracker/enums/workout_status.dart';
 import 'package:gym_tracker/screens/profile/settings_page.dart';
 import 'package:gym_tracker/screens/workout/workout_detail_page.dart';
+import '../../enums/enums.dart';
+import '../../models/app_settings.dart';
 import '../../models/models.dart';
 import '../../services/database_service.dart';
 import 'calendar_page.dart'; // 💡 Importă corect pagina de calendar (ajustează calea dacă e diferită)
@@ -15,11 +17,22 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   List<MapEntry<dynamic, WorkoutLog>> _finishedLogsWithKeys = [];
+  late UnitSystem _globalUnit;
 
   @override
   void initState() {
     super.initState();
+    _loadUnitPreference();
     _loadWorkoutHistory();
+  }
+
+  void _loadUnitPreference() {
+    final Map? rawSettings = DatabaseService.settingsBox.get('appSettings') as Map?;
+    final AppSettings settings = rawSettings != null ? AppSettings.fromMap(rawSettings) : const AppSettings();
+
+    setState(() {
+      _globalUnit = settings.unitSystem;
+    });
   }
 
   void _loadWorkoutHistory() {
@@ -42,20 +55,7 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   String _formatDateNative(DateTime dt) {
-    final luni = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec'
-    ];
+    final luni = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     final luna = luni[dt.month - 1];
     final ziua = dt.day.toString().padLeft(2, '0');
     final ora = dt.hour.toString().padLeft(2, '0');
@@ -95,6 +95,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   builder: (context) => const SettingsPage(),
                 ),
               );
+              _loadUnitPreference();
             },
           ),
           // IconButton(
@@ -108,16 +109,12 @@ class _ProfilePageState extends State<ProfilePage> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.history,
-                      size: 64,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  Icon(Icons.history, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
                   const SizedBox(height: 16),
                   Text(
                     'No completed workouts yet.\nTime to hit the gym! 🏋️‍♂️',
                     textAlign: TextAlign.center,
-                    style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        fontSize: 16),
+                    style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 16),
                   ),
                 ],
               ),
@@ -126,8 +123,7 @@ class _ProfilePageState extends State<ProfilePage> {
               children: [
                 _buildGlobalStatsHeader(),
                 Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16.0, vertical: 8.0),
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                   child: Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
@@ -144,15 +140,13 @@ class _ProfilePageState extends State<ProfilePage> {
                 Expanded(
                   child: ListView.builder(
                     itemCount: _finishedLogsWithKeys.length,
-                    padding:
-                        const EdgeInsets.only(left: 16, right: 16, bottom: 16),
+                    padding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
                     itemBuilder: (context, index) {
                       final entry = _finishedLogsWithKeys[index];
                       final logKey = entry.key;
                       final log = entry.value;
 
-                      final String formattedDate =
-                          _formatDateNative(log.startTime);
+                      final String formattedDate = _formatDateNative(log.startTime);
 
                       return Card(
                         margin: const EdgeInsets.symmetric(vertical: 8.0),
@@ -176,22 +170,16 @@ class _ProfilePageState extends State<ProfilePage> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
                                     Expanded(
                                       child: Text(
                                         log.routineTitle,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleLarge,
+                                        style: Theme.of(context).textTheme.titleLarge,
                                       ),
                                     ),
                                     Icon(Icons.chevron_right,
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurfaceVariant,
-                                        size: 20),
+                                        color: Theme.of(context).colorScheme.onSurfaceVariant, size: 20),
                                   ],
                                 ),
                                 const SizedBox(height: 4),
@@ -199,9 +187,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                   formattedDate,
                                   // style: Theme.of(context).textTheme.bodyMedium,
                                   style: TextStyle(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant,
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                                     fontSize: 12,
                                   ),
                                 ),
@@ -214,9 +200,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                         style: TextStyle(
                                             fontSize: 11,
                                             fontWeight: FontWeight.w500,
-                                            color: Theme.of(context)
-                                                .colorScheme
-                                                .onSurfaceVariant,
+                                            color: Theme.of(context).colorScheme.onSurfaceVariant,
                                             letterSpacing: 0.5),
                                       ),
                                     ),
@@ -226,9 +210,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                         style: TextStyle(
                                             fontSize: 11,
                                             fontWeight: FontWeight.w500,
-                                            color: Theme.of(context)
-                                                .colorScheme
-                                                .onSurfaceVariant,
+                                            color: Theme.of(context).colorScheme.onSurfaceVariant,
                                             letterSpacing: 0.5),
                                       ),
                                     ),
@@ -241,21 +223,14 @@ class _ProfilePageState extends State<ProfilePage> {
                                       child: Row(
                                         children: [
                                           Icon(Icons.access_time,
-                                              size: 16,
-                                              color: Theme.of(context)
-                                                  .colorScheme
-                                                  .onSurface),
+                                              size: 16, color: Theme.of(context).colorScheme.onSurface),
                                           const SizedBox(width: 6),
                                           Text(
-                                            log.endTime != null
-                                                ? log.formattedDuration
-                                                : '0 min',
+                                            log.endTime != null ? log.formattedDuration : '0 min',
                                             style: TextStyle(
                                                 fontSize: 15,
                                                 fontWeight: FontWeight.bold,
-                                                color: Theme.of(context)
-                                                    .colorScheme
-                                                    .onSurface),
+                                                color: Theme.of(context).colorScheme.onSurface),
                                           ),
                                         ],
                                       ),
@@ -264,19 +239,15 @@ class _ProfilePageState extends State<ProfilePage> {
                                       child: Row(
                                         children: [
                                           Icon(Icons.fitness_center,
-                                              size: 16,
-                                              color: Theme.of(context)
-                                                  .colorScheme
-                                                  .onSurface),
+                                              size: 16, color: Theme.of(context).colorScheme.onSurface),
                                           const SizedBox(width: 6),
                                           Text(
-                                            '${log.totalVolume.toStringAsFixed(0)} kg',
+                                            // '${log.totalVolume.toStringAsFixed(0)} kg',
+                                            _globalUnit.toFullDisplay(log.totalVolume),
                                             style: TextStyle(
                                                 fontSize: 15,
                                                 fontWeight: FontWeight.bold,
-                                                color: Theme.of(context)
-                                                    .colorScheme
-                                                    .onSurface),
+                                                color: Theme.of(context).colorScheme.onSurface),
                                           ),
                                         ],
                                       ),
@@ -310,8 +281,7 @@ class _ProfilePageState extends State<ProfilePage> {
       padding: const EdgeInsets.all(16.0),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.primary.withOpacity(0.08),
-        border: Border.all(
-            color: Theme.of(context).colorScheme.primary.withOpacity(0.15)),
+        border: Border.all(color: Theme.of(context).colorScheme.primary.withOpacity(0.15)),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -320,34 +290,20 @@ class _ProfilePageState extends State<ProfilePage> {
           Column(
             children: [
               Text('Total Sessions',
-                  style: TextStyle(
-                      fontSize: 12,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                  style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
               const SizedBox(height: 4),
-              Text('$totalWorkouts',
-                  style: const TextStyle(
-                      fontSize: 22, fontWeight: FontWeight.bold)),
+              Text('$totalWorkouts', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
             ],
           ),
-          Container(
-              width: 1,
-              height: 35,
-              color: Theme.of(context)
-                  .colorScheme
-                  .onSurfaceVariant
-                  .withOpacity(0.2)),
+          Container(width: 1, height: 35, color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.2)),
           Column(
             children: [
               Text('Total Volume Lifted',
-                  style: TextStyle(
-                      fontSize: 12,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                  style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
               const SizedBox(height: 4),
-              Text('${globalVolume.toStringAsFixed(0)} kg',
+              Text(_globalUnit.toFullDisplay(globalVolume),
                   style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).colorScheme.secondary)),
+                      fontSize: 22, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.secondary)),
             ],
           ),
         ],
