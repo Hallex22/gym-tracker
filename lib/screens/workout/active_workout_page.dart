@@ -1,15 +1,19 @@
 import 'dart:async';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:gym_tracker/extensions/string_extension.dart';
 import 'package:gym_tracker/screens/exercises/exercise_detail_page.dart';
 import 'package:gym_tracker/screens/exercises/exercise_selection_page.dart';
 import 'package:gym_tracker/services/stats_service.dart';
+import 'package:gym_tracker/theme/app_theme.dart';
 import 'package:gym_tracker/widgets/app_buttons.dart';
+import 'package:gym_tracker/widgets/rest_timer_banner.dart';
 import 'package:gym_tracker/widgets/top_toast.dart';
 import '../../../models/models.dart';
 import '../../enums/enums.dart';
 import '../../models/app_settings.dart';
 import '../../services/database_service.dart';
+import '../../services/rest_timer_service.dart';
 import '../../widgets/app_actions_sheet.dart';
 
 class ActiveWorkoutPage extends StatefulWidget {
@@ -29,21 +33,31 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
   late TextEditingController _titleController;
 
   // 🔧 Cache exercitiu-complet indexat dupa id (Exercise.id -> Exercise).
-  // Construit o singura data, nu mai depinde de schema de chei din Hive
   late Map<int, Exercise> _exerciseCache;
 
   // 🆕 Unitatea de masura preferata global (din Settings), incarcata o data.
   late UnitSystem _globalUnit;
+  bool _globalAutoTimer = false;
+  int _globalTimerDuration = 90;
 
   // 🆕 Override temporar, DOAR pentru sesiunea curenta, per exercitiu.
-  // Nu se salveaza nicaieri - la iesirea din pagina dispare, revine la preferinta globala.
   final Map<int, UnitSystem> _exerciseUnitOverride = {};
+
+  // 🆕 Override pentru timer per exercitiu (daca e activ/inactiv pe parcursul sesiunii)
+  final Map<int, bool> _exerciseTimerOverride = {};
+  final Map<int, int> _exerciseTimerDuration = {};
+
+  // Mapare pentru a retine daca un exercitiu intreg a fost completat in sesiunea curenta
+  final Map<int, bool> _exerciseCompletedStatus = {};
+
+  // Generăm o listă de secunde din 5 în 5, de la 5 secunde până la 10 minute (600 secunde)
+  final List<int> _wheelTimerOptions = List.generate(120, (index) => (index + 1) * 5);
 
   @override
   void initState() {
     super.initState();
     _titleController = TextEditingController(text: widget.routine.title);
-    _loadUnitPreference();
+    _loadGlobalSettings();
     _buildExerciseCache();
     _loadOrInitializeWorkout();
     _startLiveTimer();
@@ -56,11 +70,26 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
     super.dispose();
   }
 
-  void _loadUnitPreference() {
+  void _loadGlobalSettings() {
     final Map? rawSettings = DatabaseService.settingsBox.get('appSettings') as Map?;
     final AppSettings settings = rawSettings != null ? AppSettings.fromMap(rawSettings) : const AppSettings();
     _globalUnit = settings.unitSystem;
+
+    try {
+      _globalAutoTimer = settings.enableAutoRestTimer;
+      _globalTimerDuration = settings.defaultRestTimerDuration;
+    } catch (_) {
+      debugPrint("Ceva nu a functionat la incarcarea setarilor");
+      _globalAutoTimer = false;
+      _globalTimerDuration = 90;
+    }
   }
+
+  // Determină dacă rest timer-ul este activ pentru exercițiul selectat
+  bool _isTimerEnabledFor(int exerciseId) => _exerciseTimerOverride[exerciseId] ?? _globalAutoTimer;
+
+  // Determină durata activă a rest timer-ului pentru exercițiul curent
+  int _timerDurationFor(int exerciseId) => _exerciseTimerDuration[exerciseId] ?? _globalTimerDuration;
 
   // Unitatea activa pentru un exercitiu: override local daca exista, altfel cea globala.
   UnitSystem _unitFor(int exerciseId) => _exerciseUnitOverride[exerciseId] ?? _globalUnit;
@@ -75,7 +104,6 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
     });
   }
 
-  // Formatare curata: 100.0 -> "100", 45.5 -> "45.5" (fara zecimale inutile).
   String _formatWeight(double value) {
     if (value == value.roundToDouble()) {
       return value.toStringAsFixed(0);
@@ -83,7 +111,136 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
     return value.toStringAsFixed(1);
   }
 
-  // Drawer-ul de selectie a tipului de set, deschis la tap pe eticheta setului.
+  Future<void> _updateExerciseNotesPersistent(Exercise exercise, String notes) async {
+    final updatedExercise = exercise.copyWith(notes: notes.trim().isEmpty ? null : notes.trim());
+    _exerciseCache[exercise.id] = updatedExercise;
+    await DatabaseService.exercisesBox.put(exercise.id, updatedExercise.toMap());
+  }
+
+  // Afișează Bottom Sheet-ul personalizat cu rotița verticală (Stil Mouse/iOS Picker) din 5 în 5 secunde
+  void _showTimerSetupBottomSheet(int exerciseId, String exerciseName) {
+    final theme = Theme.of(context);
+    bool localEnabled = _isTimerEnabledFor(exerciseId);
+    int localDuration = _timerDurationFor(exerciseId);
+
+    // Identificăm indexul inițial în listă pentru durata curentă a exercițiului
+    int initialSelectedIndex = _wheelTimerOptions.indexOf(localDuration);
+    if (initialSelectedIndex == -1) {
+      initialSelectedIndex = _wheelTimerOptions.indexOf(90); // default fallback la 90s dacă nu se potrivește fix
+      if (initialSelectedIndex == -1) initialSelectedIndex = 17;
+    }
+
+    // Controller special de la Flutter/Cupertino pentru setarea poziției inițiale în rotiță
+    final FixedExtentScrollController wheelController = FixedExtentScrollController(initialItem: initialSelectedIndex);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: theme.colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.onSurfaceVariant.withOpacity(0.4),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Rest Timer ⏱️',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
+                  ),
+                  Text(
+                    'Set instantaneous rest timer or activate auto rest for $exerciseName',
+                    style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                  const SizedBox(height: 16),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Enable Rest Timer', style: TextStyle(fontWeight: FontWeight.w500)),
+                    subtitle: const Text('Auto start when checking off a completed set'),
+                    value: localEnabled,
+                    onChanged: (val) {
+                      setModalState(() => localEnabled = val);
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  Center(
+                    child: Text(
+                      'Duration: $localDuration seconds',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: theme.colorScheme.primary),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  // Zona de Rotiță Verticală 3D (Tip Mouse Scroll / Cupertino)
+                  SizedBox(
+                    height: 180,
+                    child: CupertinoPicker(
+                      scrollController: wheelController,
+                      itemExtent: 40,
+                      magnification: 1.22,
+                      squeeze: 1.2,
+                      useMagnifier: true,
+                      onSelectedItemChanged: (int index) {
+                        setModalState(() {
+                          localDuration = _wheelTimerOptions[index];
+                        });
+                      },
+                      children: _wheelTimerOptions.map((duration) {
+                        final minutes = duration ~/ 60;
+                        final seconds = duration % 60;
+                        final labelString = minutes > 0 ? '$minutes min $seconds s' : '$seconds sec';
+                        return Center(
+                          child: Text(
+                            labelString,
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: theme.colorScheme.onSurface,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: AppFilledButton(
+                      label: 'Done',
+                      onPressed: () {
+                        setState(() {
+                          _exerciseTimerOverride[exerciseId] = localEnabled;
+                          _exerciseTimerDuration[exerciseId] = localDuration;
+                        });
+                        Navigator.pop(context);
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   void _showSetTypeSheet(LoggedExercise exercise, int setIndex, LoggedSet currentSet) {
     final List<SheetActionItem> actions = SetType.values.map((type) {
       return SheetActionItem(
@@ -107,9 +264,9 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
     if (exercise.sets.length > 1) {
       actions.add(
         SheetActionItem(
-          icon: Icons.delete_sweep_outlined, // O iconiță sugestivă de ștergere
+          icon: Icons.delete_sweep_outlined,
           label: 'Delete Set #${setIndex + 1}',
-          color: Colors.redAccent, // Culoare roșie pentru a avertiza că este o acțiune distructivă
+          color: Colors.redAccent,
           onPressed: () {
             setState(() {
               exercise.sets.removeAt(setIndex);
@@ -135,7 +292,6 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
     }
   }
 
-  // Helper unic de lookup - foloseste-l peste tot in loc de exercisesBox.get(...)
   Exercise? _resolveExercise(int exerciseId) => _exerciseCache[exerciseId];
 
   void _startLiveTimer() {
@@ -295,7 +451,7 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
   Map<String, dynamic> _calculateCurrentStats() {
     final currentSnapshotLog = WorkoutLog(
       startTime: _sessionStart,
-      endTime: DateTime.now(), // setăm temporar acum ca să funcționeze gettere-le duratei
+      endTime: DateTime.now(),
       routineTitle: _titleController.text.trim(),
       exercises: List.from(_activeExercises),
       status: WorkoutStatus.started,
@@ -306,34 +462,17 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
     final minutes = difference.inMinutes.remainder(60).toString().padLeft(2, '0');
     final seconds = difference.inSeconds.remainder(60).toString().padLeft(2, '0');
 
-    String durationString = hours > 0 ? '${hours.toString().padLeft(2, '0')}:$minutes:$seconds' : '$minutes:$seconds';
+    String durationString =
+        hours > 0 ? '${hours.toString().padLeft(2, '0')}:${minutes}:${seconds}' : '${minutes}:${seconds}';
 
     return {
       'durationStr': durationString,
       'durationMin': difference.inMinutes,
       'exercisesCount': _activeExercises.length,
-      // 🔧 Volumul e stocat mereu in kg. Pentru afisare, il convertim pe baza
-      // unitatii GLOBALE (default din Settings) - nu pe overrides per-exercitiu,
-      // acelea sunt doar pentru completarea inputurilor individuale.
       'volume': currentSnapshotLog.totalVolume,
       'volumeStr': '${_formatWeight(_globalUnit.toDisplay(currentSnapshotLog.totalVolume))} ${_globalUnit.label}',
       'setsCount': currentSnapshotLog.completedSetsCount
     };
-  }
-
-  LoggedExercise? _getPreviousLogForExercise(int exerciseId) {
-    final allLogs = DatabaseService.logsBox.values.map((e) => WorkoutLog.fromMap(e as Map)).toList().reversed;
-
-    for (var log in allLogs) {
-      if (log.status == WorkoutStatus.finished) {
-        for (var ex in log.exercises) {
-          if (ex.exerciseId == exerciseId) {
-            return ex;
-          }
-        }
-      }
-    }
-    return null;
   }
 
   Future<void> _showFinishConfirmationDialog() async {
@@ -462,10 +601,8 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
   }
 
   Future<void> _navigateToSelectExercise() async {
-    // Colectăm ID-urile lightweight de la exercițiile deja active
     final List<int> existingIds = _activeExercises.map((e) => e.exerciseId).toList();
 
-    // 💡 SCHIMBARE: Schimbăm tipul generic din <Exercise> în <List<Exercise>>
     final List<Exercise>? selectedExercises = await Navigator.push<List<Exercise>>(
       context,
       MaterialPageRoute(
@@ -475,14 +612,12 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
       ),
     );
 
-    // 💡 SCHIMBARE: Dacă utilizatorul a selectat unul sau mai multe exerciții, le adăugăm pe toate
     if (selectedExercises != null && selectedExercises.isNotEmpty && mounted) {
       setState(() {
         for (final ex in selectedExercises) {
           _activeExercises.add(
             LoggedExercise(
               exerciseId: ex.id,
-              // Fiecare exercițiu nou pleacă cu un set gol implicit
               sets: [const LoggedSet(weight: 0.0, reps: 0)],
             ),
           );
@@ -515,9 +650,6 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
       ],
     );
 
-    // 🔧 Expanded trebuie sa ramana copil direct al Row-ului parinte.
-    // GestureDetector-ul (daca exista) merge INAUNTRU lui Expanded, nu in jurul lui,
-    // altfel apare "Incorrect use of ParentDataWidget" la fiecare rebuild.
     return Expanded(
       child: onTap != null
           ? GestureDetector(
@@ -572,15 +704,11 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
               fontWeight: FontWeight.bold,
               color: theme.colorScheme.onSurface,
             ),
-            decoration: InputDecoration(
+            decoration: const InputDecoration(
               hintText: 'Workout Title...',
-              hintStyle: TextStyle(
-                  fontWeight: FontWeight.normal, fontSize: 14, color: Theme.of(context).colorScheme.onSurfaceVariant),
               border: InputBorder.none,
               focusedBorder: InputBorder.none,
               enabledBorder: InputBorder.none,
-              errorBorder: InputBorder.none,
-              disabledBorder: InputBorder.none,
               isDense: true,
               contentPadding: EdgeInsets.zero,
             ),
@@ -621,7 +749,6 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    // 🆕 Tap pe "Duration" deschide modala de editare a duratei/start time-ului.
                     _buildLiveStatColumn('Duration', stats['durationStr'], theme,
                         onTap: _showEditWorkoutDurationDialog),
                     _buildLiveStatColumn('Volume', stats['volumeStr'], theme),
@@ -637,9 +764,9 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Text(
+                              const Text(
                                 '🏋️',
-                                style: const TextStyle(fontSize: 48),
+                                style: TextStyle(fontSize: 48),
                               ),
                               const SizedBox(height: 12),
                               Text(
@@ -665,8 +792,6 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                       )
                     : ReorderableListView.builder(
                         itemCount: _activeExercises.length,
-                        // 🔧 FIX: parametrul corect este `onReorder`, nu `onReorderItem`,
-                        // si trebuie ajustat newIndex cand se muta in jos in lista.
                         onReorder: (oldIndex, newIndex) {
                           setState(() {
                             if (newIndex > oldIndex) newIndex -= 1;
@@ -679,7 +804,6 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                           final exercise = _activeExercises[exIndex];
                           final sets = exercise.sets;
 
-                          // 🔧 Reconstruim exercitiul original din cache, dupa id.
                           final fullExercise = _resolveExercise(exercise.exerciseId);
                           final coverImage = fullExercise?.coverImage;
 
@@ -687,22 +811,29 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                           final isImageEmpty = coverImage == null || coverImage.isEmpty;
 
                           final displayName = fullExercise?.name ?? 'Exercițiu necunoscut (ID: ${exercise.exerciseId})';
-
                           final isBodyWeight = fullExercise?.equipment == Equipment.bodyweight;
 
-                          // 🆕 Unitatea activa pentru acest exercitiu (global sau override local).
                           final unit = _unitFor(exercise.exerciseId);
                           final hasOverride = _exerciseUnitOverride.containsKey(exercise.exerciseId);
+
+                          final timerActive = _isTimerEnabledFor(exercise.exerciseId);
+                          final timerSeconds = _timerDurationFor(exercise.exerciseId);
+
+                          // Starea curentă a checkmark-ului (isCompleted) pentru întreg cardul
+                          final isExerciseFinished = _exerciseCompletedStatus[exercise.exerciseId] ?? false;
 
                           return Card(
                             key: ValueKey('active_ex_${exercise.exerciseId}_$exIndex'),
                             clipBehavior: Clip.antiAlias,
                             margin: const EdgeInsets.all(12),
+                            // 🆕 Efect vizual: Dacă exercițiul este gata, cardul primește un fundal verde-opac fin
+                            color: isExerciseFinished ? Colors.green.withOpacity(0.06) : theme.cardColor,
                             child: Padding(
                               padding: const EdgeInsets.symmetric(vertical: 12),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
+                                  // --- PRIMUL RÂND: DRAG, AVATAR, TITLU ȘI DOTS + CHECKMARK ---
                                   Padding(
                                     padding: const EdgeInsets.symmetric(horizontal: 12),
                                     child: Row(
@@ -718,7 +849,6 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                                           ),
                                           const SizedBox(width: 12),
                                         ],
-                                        // Titlul înfășurat în InkWell pentru detalii
                                         Expanded(
                                           child: InkWell(
                                             onTap: () {
@@ -747,15 +877,17 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                                                         child: Text(
                                                           displayName,
                                                           style: TextStyle(
-                                                              fontSize: 16,
-                                                              fontWeight: FontWeight.bold,
-                                                              color: theme.colorScheme.onSurface),
+                                                            fontSize: 16,
+                                                            fontWeight: FontWeight.bold,
+                                                            color: theme.colorScheme.onSurface,
+                                                            // Tăiem textul discret dacă exercițiul e finalizat
+                                                            decoration:
+                                                                isExerciseFinished ? TextDecoration.lineThrough : null,
+                                                          ),
                                                           maxLines: 1,
                                                           overflow: TextOverflow.ellipsis,
                                                         ),
                                                       ),
-                                                      // 🆕 Chip mic care arata cand unitatea
-                                                      // e diferita de cea globala (override activ).
                                                       if (hasOverride) ...[
                                                         const SizedBox(width: 6),
                                                         Container(
@@ -792,9 +924,8 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                                             ),
                                           ),
                                         ),
-                                        // Meniul de opțiuni rapid (AppActionsSheet)
                                         IconButton(
-                                          icon: Icon(Icons.more_vert, color: theme.colorScheme.onSurfaceVariant),
+                                          icon: Icon(Icons.more_horiz, color: theme.colorScheme.onSurfaceVariant),
                                           onPressed: () {
                                             AppActionsSheet.show(
                                               context: context,
@@ -806,17 +937,14 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                                                   label: 'Add Warmup Set',
                                                   onPressed: () {
                                                     setState(() {
-                                                      // Preluăm prima valoare existentă ca punct de pornire, sau 0.0 / 0 dacă lista e goală
                                                       double firstWeight = sets.isNotEmpty ? sets.first.weight : 0.0;
                                                       int firstReps = sets.isNotEmpty ? sets.first.reps : 0;
-
-                                                      // Inserăm setul de warmup direct la indexul 0 (la începutul listei)
                                                       sets.insert(
                                                         0,
                                                         LoggedSet(
                                                           weight: firstWeight,
                                                           reps: firstReps,
-                                                          type: SetType.warmup, // Forțăm tipul de warmup
+                                                          type: SetType.warmup,
                                                           isCompleted: false,
                                                         ),
                                                       );
@@ -839,9 +967,6 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                                                     }
                                                   },
                                                 ),
-                                                // 🆕 Toggle temporar de unitate DOAR pentru
-                                                // acest exercitiu, doar daca nu e bodyweight
-                                                // (BW nu are input numeric de greutate).
                                                 if (!isBodyWeight)
                                                   SheetActionItem(
                                                     icon: Icons.swap_horiz,
@@ -881,8 +1006,10 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                                                     if (confirmDelete == true) {
                                                       setState(() {
                                                         _activeExercises.removeAt(exIndex);
-                                                        // curatam si eventualul override, ca sa nu ramana orfan
                                                         _exerciseUnitOverride.remove(exercise.exerciseId);
+                                                        _exerciseTimerOverride.remove(exercise.exerciseId);
+                                                        _exerciseTimerDuration.remove(exercise.exerciseId);
+                                                        _exerciseCompletedStatus.remove(exercise.exerciseId);
                                                       });
                                                       _updateLiveProgress();
                                                     }
@@ -895,9 +1022,88 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                                       ],
                                     ),
                                   ),
+
+                                  // 🆕 REZOLVARE CERINȚĂ 2: Input-ul de notițe complet curat, fără borders/prefix icons
+                                  if (!isMissingData)
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                                      child: TextFormField(
+                                        initialValue: fullExercise.notes,
+                                        style: TextStyle(
+                                            fontSize: 13,
+                                            color: context.text.withOpacity(0.8),
+                                            fontStyle: FontStyle.normal),
+                                        maxLines: null,
+                                        decoration: InputDecoration(
+                                          hintText: 'Add exercise notes here...',
+                                          hintStyle: TextStyle(
+                                              fontSize: 12,
+                                              color: context.textMuted.withOpacity(0.5),
+                                              fontStyle: FontStyle.normal),
+                                          isDense: true,
+                                          contentPadding: const EdgeInsets.symmetric(vertical: 4),
+                                          border: InputBorder.none,
+                                          focusedBorder: InputBorder.none,
+                                          enabledBorder: InputBorder.none,
+                                          errorBorder: InputBorder.none,
+                                          disabledBorder: InputBorder.none,
+                                        ),
+                                        onChanged: (text) => _updateExerciseNotesPersistent(fullExercise, text),
+                                      ),
+                                    ),
+
+                                  // --- AL TREILEA RÂND: BUTON ACTION PENTRU REST TIMER OVERRIDE (ROTIȚĂ DIN 5 ÎN 5) ---
                                   Padding(
-                                      padding: EdgeInsets.symmetric(horizontal: 12),
+                                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(8),
+                                      onTap: () => _showTimerSetupBottomSheet(exercise.exerciseId, displayName),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: timerActive
+                                              ? theme.colorScheme.primary.withOpacity(0.08)
+                                              : theme.colorScheme.onSurface.withOpacity(0.04),
+                                          borderRadius: BorderRadius.circular(6),
+                                          border: Border.all(
+                                              color: timerActive
+                                                  ? theme.colorScheme.primary.withOpacity(0.3)
+                                                  : theme.colorScheme.onSurfaceVariant.withOpacity(0.15)),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.hourglass_empty_rounded,
+                                                size: 14,
+                                                color: timerActive
+                                                    ? theme.colorScheme.primary
+                                                    : theme.colorScheme.onSurfaceVariant),
+                                            const SizedBox(width: 6),
+                                            Text(
+                                              timerActive ? 'Rest: $timerSeconds s' : 'Rest: Off',
+                                              style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: timerActive
+                                                      ? theme.colorScheme.primary
+                                                      : theme.colorScheme.onSurfaceVariant),
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Icon(Icons.arrow_drop_down_rounded,
+                                                size: 16,
+                                                color: timerActive
+                                                    ? theme.colorScheme.primary
+                                                    : theme.colorScheme.onSurfaceVariant),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+
+                                  Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12),
                                       child: Divider(color: theme.colorScheme.primary.withOpacity(0.2))),
+
                                   // --- HEADER COLOANE ---
                                   Padding(
                                     padding: const EdgeInsets.symmetric(vertical: 4.0),
@@ -930,18 +1136,17 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                                                   textAlign: TextAlign.center,
                                                 )
                                               : Row(
-                                                  mainAxisAlignment: MainAxisAlignment
-                                                      .center, // Îl centram frumos pe mijlocul coloanei
+                                                  mainAxisAlignment: MainAxisAlignment.center,
                                                   mainAxisSize: MainAxisSize.min,
                                                   children: [
                                                     Icon(
-                                                      Icons.fitness_center, // 👈 Gantera ta mică
-                                                      size: 12, // Dimensiune potrivită, discretă
+                                                      Icons.fitness_center,
+                                                      size: 12,
                                                       color: theme.colorScheme.onSurfaceVariant.withOpacity(0.7),
                                                     ),
-                                                    const SizedBox(width: 4), // Mic spațiu între iconiță și text
+                                                    const SizedBox(width: 4),
                                                     Text(
-                                                      unit.label.capitalize(), // Va afișa "Kg" sau "Lbs"
+                                                      unit.label.capitalize(),
                                                       style: TextStyle(
                                                           fontWeight: FontWeight.w600,
                                                           fontSize: 12,
@@ -957,6 +1162,15 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                                                     fontSize: 12,
                                                     color: theme.colorScheme.onSurfaceVariant),
                                                 textAlign: TextAlign.center)),
+                                        Expanded(
+                                          child: Center(
+                                            child: Icon(
+                                              Icons.check_rounded,
+                                              size: 16,
+                                              color: theme.colorScheme.onSurfaceVariant,
+                                            ),
+                                          ),
+                                        ),
                                       ],
                                     ),
                                   ),
@@ -1023,7 +1237,6 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                                           : null,
                                       child: Row(
                                         children: [
-                                          // 1. Coloana: Numar Set (Tappable)
                                           SizedBox(
                                             width: 50,
                                             child: InkWell(
@@ -1035,8 +1248,10 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                                                   mainAxisSize: MainAxisSize.min,
                                                   children: [
                                                     Text(
-                                                      set.type != SetType.normal ? set.type.shortLabel : '${setIndex + 1}',
-                                                      style: TextStyle(
+                                                        set.type != SetType.normal
+                                                            ? set.type.shortLabel
+                                                            : '${setIndex + 1}',
+                                                        style: TextStyle(
                                                           fontSize: 16,
                                                           fontWeight: FontWeight.bold,
                                                           color: set.type.color ?? theme.colorScheme.onSurface,
@@ -1046,8 +1261,6 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                                               ),
                                             ),
                                           ),
-
-                                          // 2. 🆕 Coloana: Previous (Cu Autocomplete la apăsare)
                                           SizedBox(
                                             width: 100,
                                             child: Align(
@@ -1058,7 +1271,6 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                                                     ? null
                                                     : () {
                                                         setState(() {
-                                                          // Copiem datele direct în setul curent din UI
                                                           exercise.sets[setIndex] = LoggedSet(
                                                             weight: prevWeightInKg,
                                                             reps: prevReps,
@@ -1079,7 +1291,6 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                                                   child: Text(
                                                     prevText,
                                                     style: TextStyle(
-                                                      // fontSize: 12,
                                                       fontWeight: FontWeight.w500,
                                                       color: theme.colorScheme.onSurfaceVariant.withOpacity(0.6),
                                                     ),
@@ -1089,8 +1300,6 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                                               ),
                                             ),
                                           ),
-
-                                          // 3. Coloana: Input Greutate (Weight)
                                           Expanded(
                                             child: Padding(
                                               padding: const EdgeInsets.symmetric(horizontal: 4.0),
@@ -1143,8 +1352,6 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                                                     ),
                                             ),
                                           ),
-
-                                          // 4. Reps
                                           Expanded(
                                             child: Padding(
                                               padding: const EdgeInsets.symmetric(horizontal: 4.0),
@@ -1180,6 +1387,40 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                                               ),
                                             ),
                                           ),
+                                          Expanded(
+                                            child: Center(
+                                              child: IconButton(
+                                                padding: EdgeInsets.zero,
+                                                constraints: const BoxConstraints(),
+                                                icon: Icon(
+                                                  set.isCompleted ? Icons.check_circle : Icons.circle_outlined,
+                                                  color: set.isCompleted
+                                                      ? context.primary
+                                                      : theme.colorScheme.onSurfaceVariant.withOpacity(0.5),
+                                                  size: 22,
+                                                ),
+                                                onPressed: () {
+                                                  final bool turningOn =
+                                                      !set.isCompleted; // Va fi true dacă userul bifează setul acum
+
+                                                  setState(() {
+                                                    exercise.sets[setIndex] = LoggedSet(
+                                                      weight: set.weight,
+                                                      reps: set.reps,
+                                                      type: set.type,
+                                                      isCompleted: turningOn,
+                                                    );
+                                                  });
+
+                                                  _updateLiveProgress();
+
+                                                  if (turningOn && timerActive) {
+                                                    RestTimerService().startTimer(seconds: timerSeconds);
+                                                  }
+                                                },
+                                              ),
+                                            ),
+                                          ),
                                         ],
                                       ),
                                     );
@@ -1189,7 +1430,7 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
 
                                   // --- ACȚIUNI SET (ADD/REMOVE) ---
                                   Padding(
-                                      padding: EdgeInsets.symmetric(horizontal: 12),
+                                      padding: const EdgeInsets.symmetric(horizontal: 12),
                                       child: Row(
                                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                         children: [
@@ -1216,7 +1457,7 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                                                 _updateLiveProgress();
                                               },
                                               child: const Text('Remove Last Set',
-                                                  style: TextStyle(color: Colors.redAccent)),
+                                                  style: TextStyle(color: Colors.redAccent, fontSize: 13)),
                                             )
                                         ],
                                       )),
@@ -1227,6 +1468,7 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                         },
                       ),
               ),
+              const RestTimerBanner(),
             ],
           ),
         ),

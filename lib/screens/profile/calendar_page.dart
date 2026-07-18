@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:gym_tracker/enums/workout_status.dart';
+import 'package:gym_tracker/theme/app_theme.dart';
+import 'package:gym_tracker/utils/date_utils.dart';
 import 'package:gym_tracker/widgets/top_toast.dart';
 import 'package:table_calendar/table_calendar.dart';
 import '../../models/models.dart';
@@ -21,6 +23,9 @@ class _CalendarPageState extends State<CalendarPage> {
   CalendarFormat _calendarFormat = CalendarFormat.month;
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
+  
+  // Reținem anul selectat curent
+  int _selectedYear = DateTime.now().year;
 
   // { Data: [Lista de antrenamente] }
   Map<DateTime, List<dynamic>> _workoutsByDay = {};
@@ -63,14 +68,72 @@ class _CalendarPageState extends State<CalendarPage> {
     return _workoutsByDay[normalizedDay] ?? [];
   }
 
+  // 🆕 Calculează câte antrenamente au fost finalizate în anul selectat
+  int _getWorkoutsCountForYear(int year) {
+    int count = 0;
+    _workoutsByDay.forEach((date, list) {
+      if (date.year == year) {
+        count += list.length;
+      }
+    });
+    return count;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final selectedEvents = _getWorkoutsForDay(_selectedDay ?? _focusedDay);
 
+    // 🆕 Generăm o listă mai compactă de ani (de la acum 3 ani până la anul curent)
+    final int currentYear = DateTime.now().year;
+    final List<int> availableYears = List.generate(4, (index) => (currentYear - 3) + index);
+
+    final int workoutsCompletedThisYear = _getWorkoutsCountForYear(_selectedYear);
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Workout Analytics 📅'),
+        title: Theme(
+          data: theme.copyWith(
+            hoverColor: Colors.transparent,
+            splashColor: Colors.transparent,
+            highlightColor: Colors.transparent,
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<int>(
+              value: _selectedYear,
+              icon: Icon(
+                Icons.keyboard_arrow_down_rounded,
+                color: theme.colorScheme.primary,
+                size: 20,
+              ),
+              elevation: 3,
+              // 🆕 Limităm înălțimea meniului pentru a forța scroll-ul în loc să acopere ecranul
+              menuMaxHeight: 200,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.onSurface,
+              ),
+              dropdownColor: theme.colorScheme.surfaceContainerHigh,
+              borderRadius: BorderRadius.circular(12),
+              onChanged: (int? newValue) {
+                if (newValue != null) {
+                  setState(() {
+                    _selectedYear = newValue;
+                    _focusedDay = DateTime(_selectedYear, 1, 1);
+                    _selectedDay = DateTime(_selectedYear, 1, 1);
+                  });
+                }
+              },
+              items: availableYears.map<DropdownMenuItem<int>>((int year) {
+                return DropdownMenuItem<int>(
+                  value: year,
+                  child: Text('$year  '),
+                );
+              }).toList(),
+            ),
+          ),
+        ),
         centerTitle: true,
         actions: [
           IconButton(
@@ -86,18 +149,58 @@ class _CalendarPageState extends State<CalendarPage> {
       ),
       body: Column(
         children: [
+          // 🆕 Statistică dinamică afișată elegant deasupra gridului
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: context.bg,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: context.borderMuted),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.emoji_events_outlined, color: context.text, size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Workouts completed in $_selectedYear',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: context.text,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Text(
+                    '$workoutsCompletedThisYear 🔥',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
           // --- COMPONENTA DE CALENDAR (MONTH / YEAR) ---
           Expanded(
-            flex: _viewMode == CalendarViewMode.month ? 0 : 3, // Îi dăm spațiu heatmap-ului să se întindă pe ecran
+            flex: _viewMode == CalendarViewMode.month ? 0 : 3,
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 250),
               child: _viewMode == CalendarViewMode.month
                   ? _buildMonthCalendar(theme)
-                  : _buildYearVerticalHeatmap(theme), // Noua grilă în stil Heavy
+                  : _buildYearVerticalHeatmap(theme),
             ),
           ),
 
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           Divider(color: theme.colorScheme.primary.withOpacity(0.2), indent: 16, endIndent: 16),
 
           // --- SECȚIUNEA DETALII ANTRENAMENTE ZI SELECTATĂ ---
@@ -106,14 +209,14 @@ class _CalendarPageState extends State<CalendarPage> {
             child: Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                'Workouts on ${_selectedDay!.day}/${_selectedDay!.month}/${_selectedDay!.year}',
+                'Workouts on: ${formatFriendlyDate(_selectedDay)}',
                 style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant, fontWeight: FontWeight.bold),
               ),
             ),
           ),
 
           Expanded(
-            flex: 2, // Spațiul pentru listă
+            flex: 2,
             child: selectedEvents.isEmpty
                 ? Center(
                     child: Text(
@@ -150,7 +253,6 @@ class _CalendarPageState extends State<CalendarPage> {
                           ),
                           trailing: const Icon(Icons.chevron_right, size: 20),
                           onTap: () {
-                            // 💡 REPARAT: Căutăm cheia din Hive comparând obiectul sau timestamp-urile milisecunde
                             dynamic correctLogKey;
 
                             for (var entry in DatabaseService.logsBox.toMap().entries) {
@@ -199,6 +301,7 @@ class _CalendarPageState extends State<CalendarPage> {
         setState(() {
           _selectedDay = selectedDay;
           _focusedDay = focusedDay;
+          _selectedYear = selectedDay.year;
         });
       },
       onFormatChanged: (format) {
@@ -207,7 +310,10 @@ class _CalendarPageState extends State<CalendarPage> {
         });
       },
       onPageChanged: (focusedDay) {
-        _focusedDay = focusedDay;
+        setState(() {
+          _focusedDay = focusedDay;
+          _selectedYear = focusedDay.year; 
+        });
       },
       calendarStyle: CalendarStyle(
         todayDecoration: BoxDecoration(
@@ -235,12 +341,11 @@ class _CalendarPageState extends State<CalendarPage> {
     );
   }
 
-  // 💡 NOU: Grilă verticală pe 3 coloane (3 luni pe rând) cu scroll liber sus-jos, exact ca în Heavy!
   Widget _buildYearVerticalHeatmap(ThemeData theme) {
-    final currentYear = DateTime.now().year;
+    final currentYear = _selectedYear;
 
     return GridView.builder(
-      key: const ValueKey('year_view_vertical'),
+      key: ValueKey('year_view_vertical_$currentYear'), 
       padding: const EdgeInsets.all(12),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 3,
@@ -254,11 +359,7 @@ class _CalendarPageState extends State<CalendarPage> {
         final daysInMonth = DateTime(currentYear, month + 1, 0).day;
         final monthName = _getMonthName(month);
 
-        // 💡 REPARAT PENTRU ALINIERE: Aflăm în ce zi a săptămânii începe luna curentă
-        // DateTime.weekday returnează 1 pentru Luni, 7 pentru Duminică.
         final firstDayWeekday = DateTime(currentYear, month, 1).weekday;
-
-        // Calculăm câte căsuțe goale („padding”) punem înainte de ziua de 1 a lunii
         final int emptySpacesBefore = firstDayWeekday - 1;
 
         return Column(
@@ -272,19 +373,16 @@ class _CalendarPageState extends State<CalendarPage> {
               child: GridView.builder(
                 physics: const NeverScrollableScrollPhysics(),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 7, // Cele 7 zile (Luni -> Duminică)
+                  crossAxisCount: 7,
                   crossAxisSpacing: 2,
                   mainAxisSpacing: 2,
                 ),
-                // Adăugăm spațiile goale la numărul total de itemi din grilă
                 itemCount: daysInMonth + emptySpacesBefore,
                 itemBuilder: (context, index) {
-                  // Dacă indexul este mai mic decât spațiile goale necesare, returnăm o căsuță invizibilă
                   if (index < emptySpacesBefore) {
                     return const SizedBox.shrink();
                   }
 
-                  // Calculăm ziua reală a lunii
                   final day = index - emptySpacesBefore + 1;
                   final currentCheckDay = DateTime(currentYear, month, day);
 

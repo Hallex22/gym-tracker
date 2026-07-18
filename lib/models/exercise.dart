@@ -20,21 +20,24 @@ class Exercise {
   final List<MuscleTarget> secondaryMuscles;
   final List<MuscleTarget> tertiaryMuscles;
 
-  const Exercise({
-    required this.id,
-    required this.name,
-    required this.sourceUrl,
-    this.coverImage,
-    required this.equipment,
-    this.mechanic,
-    this.force,
-    required this.grips,
-    required this.difficulty,
-    required this.instructions,
-    required this.primaryMuscles,
-    required this.secondaryMuscles,
-    required this.tertiaryMuscles,
-  });
+  // Extra, nu se insereasa in bd
+  final String? notes;
+
+  const Exercise(
+      {required this.id,
+      required this.name,
+      required this.sourceUrl,
+      this.coverImage,
+      required this.equipment,
+      this.mechanic,
+      this.force,
+      required this.grips,
+      required this.difficulty,
+      required this.instructions,
+      required this.primaryMuscles,
+      required this.secondaryMuscles,
+      required this.tertiaryMuscles,
+      this.notes});
 
   Map<String, dynamic> toMap() => {
         'id': id,
@@ -50,6 +53,7 @@ class Exercise {
         'primaryMuscles': primaryMuscles.map((m) => m.toMap()).toList(),
         'secondaryMuscles': secondaryMuscles.map((m) => m.toMap()).toList(),
         'tertiaryMuscles': tertiaryMuscles.map((m) => m.toMap()).toList(),
+        'notes': notes,
       };
 
   factory Exercise.fromMap(Map<dynamic, dynamic> map) {
@@ -67,15 +71,9 @@ class Exercise {
         (e) => e.name == map['equipment'],
         orElse: () => Equipment.bodyweight,
       ),
-      mechanic: map['mechanic'] != null
-          ? Mechanic.values.firstWhere((m) => m.name == map['mechanic'])
-          : null,
-      force: map['force'] != null
-          ? Force.values.firstWhere((f) => f.name == map['force'])
-          : null,
-      grips: (map['grips'] as List? ?? [])
-          .map((g) => Grip.values.firstWhere((v) => v.name == g))
-          .toList(),
+      mechanic: map['mechanic'] != null ? Mechanic.values.firstWhere((m) => m.name == map['mechanic']) : null,
+      force: map['force'] != null ? Force.values.firstWhere((f) => f.name == map['force']) : null,
+      grips: (map['grips'] as List? ?? []).map((g) => Grip.values.firstWhere((v) => v.name == g)).toList(),
       difficulty: Difficulty.values.firstWhere(
         (d) => d.name == map['difficulty'],
         orElse: () => Difficulty.beginner,
@@ -84,6 +82,7 @@ class Exercise {
       primaryMuscles: parseMuscleList(map['primaryMuscles']),
       secondaryMuscles: parseMuscleList(map['secondaryMuscles']),
       tertiaryMuscles: parseMuscleList(map['tertiaryMuscles']),
+      notes: map['notes'] as String?,
     );
   }
 
@@ -93,9 +92,7 @@ class Exercise {
 
     List<MuscleTarget> parseMuscleListJson(dynamic list) {
       if (list == null || list is! List) return [];
-      return list
-          .map((m) => MuscleTarget.fromJson(m as Map<String, dynamic>))
-          .toList();
+      return list.map((m) => MuscleTarget.fromJson(m as Map<String, dynamic>)).toList();
     }
 
     return Exercise(
@@ -105,35 +102,48 @@ class Exercise {
       coverImage: json['coverImage'] as String?,
       // Mapare sigură pentru Enum-uri din textul brut primit de la scraper
       equipment: Equipment.values.firstWhere(
-        (e) =>
-            e.name.toLowerCase() ==
-            (json['equipment'] as String? ?? '').toLowerCase().trim(),
+        (e) => e.name.toLowerCase() == (json['equipment'] as String? ?? '').toLowerCase().trim(),
         orElse: () => Equipment.bodyweight,
       ),
       mechanic: json['mechanic'] != null
-          ? Mechanic.values.firstWhere((m) =>
-              m.name.toLowerCase() ==
-              json['mechanic'].toString().toLowerCase().trim())
+          ? Mechanic.values.firstWhere((m) => m.name.toLowerCase() == json['mechanic'].toString().toLowerCase().trim())
           : null,
       force: json['force'] != null
-          ? Force.values.firstWhere((f) =>
-              f.name.toLowerCase() ==
-              json['force'].toString().toLowerCase().trim())
+          ? Force.values.firstWhere((f) => f.name.toLowerCase() == json['force'].toString().toLowerCase().trim())
           : null,
       grips: (json['grips'] as List? ?? [])
-          .map((g) => Grip.values.firstWhere(
-              (v) => v.name.toLowerCase() == g.toString().toLowerCase().trim()))
+          .map((g) => Grip.values.firstWhere((v) => v.name.toLowerCase() == g.toString().toLowerCase().trim()))
           .toList(),
       difficulty: Difficulty.values.firstWhere(
-        (d) =>
-            d.name.toLowerCase() ==
-            (json['difficulty'] as String? ?? '').toLowerCase().trim(),
+        (d) => d.name.toLowerCase() == (json['difficulty'] as String? ?? '').toLowerCase().trim(),
         orElse: () => Difficulty.beginner,
       ),
       instructions: List<String>.from(json['instructions'] ?? []),
       primaryMuscles: parseMuscleListJson(musclesJson['primary']),
       secondaryMuscles: parseMuscleListJson(musclesJson['secondary']),
       tertiaryMuscles: parseMuscleListJson(musclesJson['tertiary']),
+      notes: json['notes'] as String?,
+    );
+  }
+
+  Exercise copyWith({
+    String? notes,
+  }) {
+    return Exercise(
+      id: id,
+      name: name,
+      sourceUrl: sourceUrl,
+      coverImage: coverImage,
+      equipment: equipment,
+      mechanic: mechanic,
+      force: force,
+      grips: grips,
+      difficulty: difficulty,
+      instructions: instructions,
+      primaryMuscles: primaryMuscles,
+      secondaryMuscles: secondaryMuscles,
+      tertiaryMuscles: tertiaryMuscles,
+      notes: notes, // Noua notă modificată
     );
   }
 }

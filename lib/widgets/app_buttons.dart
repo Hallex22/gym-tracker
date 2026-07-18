@@ -117,9 +117,9 @@ class AppGhostButton extends StatelessWidget {
       return TextButton.icon(
         style: style,
         onPressed: onPressed,
-        icon: Icon(icon, size: 20),
+        icon: Icon(icon, size: 18),
         label: Text(label,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
       );
     }
 
@@ -127,7 +127,7 @@ class AppGhostButton extends StatelessWidget {
       style: style,
       onPressed: onPressed,
       child: Text(label,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
     );
   }
 }

@@ -211,6 +211,60 @@ class StatsService {
 
     return history;
   }
+
+  /// Returnează numărul de antrenamente finalizate în ultimele [weeksCount] săptămâni.
+  /// Fiecare element conține numărul săptămânii (ca etichetă sau index) și numărul de antrenamente.
+  static List<MapEntry<String, int>> getWorkoutsPerWeek(int weeksCount) {
+    if (!DatabaseService.logsBox.isOpen) return [];
+
+    // Inițializăm o listă pentru ultimele N săptămâni cu 0 antrenamente
+    final DateTime now = DateTime.now();
+
+    // Generăm intervalele pentru fiecare săptămână (de la cea mai veche la cea mai recentă)
+    final List<MapEntry<DateTimeRange, int>> weeklyBuckets = [];
+
+    for (int i = weeksCount - 1; i >= 0; i--) {
+      // Calculăm începutul și sfârșitul săptămânii relative la săptămâna curentă
+      final int daysToSubtract = i * 7;
+      final DateTime endOfWeek = now.subtract(Duration(days: daysToSubtract));
+
+      // Găsim începutul acestei săptămâni (acum 7 zile față de finalul ei)
+      final DateTime startOfWeek = endOfWeek.subtract(const Duration(days: 7));
+
+      weeklyBuckets.add(
+        MapEntry(
+          DateTimeRange(start: startOfWeek, end: endOfWeek),
+          0, // Inițial pornim de la 0 antrenamente
+        ),
+      );
+    }
+
+    // Parcurgem logurile din baza de date și le distribuim în săptămânile corespunzătoare
+    for (var value in DatabaseService.logsBox.values) {
+      final log = WorkoutLog.fromMap(value as Map);
+
+      if (log.status != WorkoutStatus.finished) continue;
+
+      for (int i = 0; i < weeklyBuckets.length; i++) {
+        final range = weeklyBuckets[i].key;
+        if (log.startTime.isAfter(range.start) && log.startTime.isBefore(range.end)) {
+          weeklyBuckets[i] = MapEntry(range, weeklyBuckets[i].value + 1);
+          break;
+        }
+      }
+    }
+
+    // Formatăm rezultatul pentru grafic (ex: "S1", "S2" sau intervalul de date "15-21 Iul")
+    return weeklyBuckets.map((bucket) {
+      final start = bucket.key.start;
+      final end = bucket.key.end;
+
+      // Format simplificat: Zi/Lună (ex: "10/07") pentru începutul săptămânii
+      final String label = '${start.day}/${start.month}';
+
+      return MapEntry(label, bucket.value);
+    }).toList();
+  }
 }
 
 // Ceva

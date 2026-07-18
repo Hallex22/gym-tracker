@@ -21,8 +21,8 @@ class _SettingsPageState extends State<SettingsPage> {
 
   final TextEditingController _weightController = TextEditingController();
 
-  // Factor de conversie standard
-  static const double _kgToLbsFactor = 2.2046226218;
+  // Opțiuni predefinite pentru timpul de odihnă (în secunde)
+  static const List<int> _timerDurationOptions = [30, 45, 60, 90, 120, 150, 180, 240, 300];
 
   @override
   void initState() {
@@ -44,14 +44,11 @@ class _SettingsPageState extends State<SettingsPage> {
 
   // Actualizează textul din controller în funcție de unitatea de măsură curentă
   void _updateWeightControllerValue(AppSettings settings) {
-    if (settings.unitSystem == UnitSystem.lbs) {
-      // Afișăm în lbs
-      final double weightInLbs = settings.bodyWeight * _kgToLbsFactor;
-      _weightController.text = weightInLbs.toStringAsFixed(1);
-    } else {
-      // Afișăm în kg
-      _weightController.text = settings.bodyWeight.toStringAsFixed(1);
-    }
+    // Convertim greutatea din kg în unitatea de afișare (kg sau lbs) folosind enum-ul tău
+    final double displayWeight = settings.unitSystem.toDisplay(settings.bodyWeight);
+
+    // Formatăm textul folosind metoda nativă din enum (elimină .0 dacă e număr întreg)
+    _weightController.text = settings.unitSystem.formatWeight(displayWeight);
   }
 
   // Funcție centralizată care salvează tot obiectul modificat în Hive
@@ -60,6 +57,15 @@ class _SettingsPageState extends State<SettingsPage> {
       _currentSettings = newSettings;
     });
     await _settingsBox.put('appSettings', newSettings.toMap());
+  }
+
+  // Ajută la formatarea secundelor într-un format prietenos pentru Dropdown (ex: 90 -> "1:30 min")
+  String _formatDurationLabel(int totalSeconds) {
+    final int minutes = totalSeconds ~/ 60;
+    final int seconds = totalSeconds % 60;
+    if (minutes == 0) return '$seconds s';
+    if (seconds == 0) return '$minutes min';
+    return '$minutes:${seconds.toString().padLeft(2, '0')} min';
   }
 
   @override
@@ -83,10 +89,10 @@ class _SettingsPageState extends State<SettingsPage> {
           _buildSectionHeader('Appearance'),
           Card(
             elevation: 0,
-            color: context.bg.withOpacity(0.5),
+            color: context.bg,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: context.borderMuted.withOpacity(0.5)),
+              side: BorderSide(color: context.borderMuted),
             ),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
@@ -131,6 +137,8 @@ class _SettingsPageState extends State<SettingsPage> {
                             bodyWeight: _currentSettings.bodyWeight,
                             enableSoundEffects: _currentSettings.enableSoundEffects,
                             theme: newTheme,
+                            enableAutoRestTimer: _currentSettings.enableAutoRestTimer,
+                            defaultRestTimerDuration: _currentSettings.defaultRestTimerDuration,
                           ),
                         );
                       }
@@ -146,10 +154,10 @@ class _SettingsPageState extends State<SettingsPage> {
           _buildSectionHeader('Preferences'),
           Card(
             elevation: 0,
-            color: context.bg.withOpacity(0.5),
+            color: context.bg,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: context.borderMuted.withOpacity(0.5)),
+              side: BorderSide(color: context.borderMuted),
             ),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
@@ -194,6 +202,8 @@ class _SettingsPageState extends State<SettingsPage> {
                           bodyWeight: _currentSettings.bodyWeight,
                           enableSoundEffects: _currentSettings.enableSoundEffects,
                           theme: _currentSettings.theme,
+                          enableAutoRestTimer: _currentSettings.enableAutoRestTimer,
+                          defaultRestTimerDuration: _currentSettings.defaultRestTimerDuration,
                         );
                         _saveSettings(updatedSettings);
                         // Recalculăm valoarea textului din căsuța de greutate pe baza noii unități selectate
@@ -210,10 +220,10 @@ class _SettingsPageState extends State<SettingsPage> {
           // --- SECȚIUNEA: GREUTATE CORPORALĂ ---
           Card(
             elevation: 0,
-            color: context.bg.withOpacity(0.5),
+            color: context.bg,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: context.borderMuted.withOpacity(0.5)),
+              side: BorderSide(color: context.borderMuted),
             ),
             child: Padding(
               padding: const EdgeInsets.all(16.0),
@@ -264,21 +274,16 @@ class _SettingsPageState extends State<SettingsPage> {
                             onChanged: (val) {
                               final double? parsedInputValue = double.tryParse(val);
                               if (parsedInputValue != null && parsedInputValue > 0) {
-                                double weightInKg;
-
-                                // 💡 Dacă suntem în lbs, facem conversia valorii introduse în kg înainte de salvare!
-                                if (_currentSettings.unitSystem == UnitSystem.lbs) {
-                                  weightInKg = parsedInputValue / _kgToLbsFactor;
-                                } else {
-                                  weightInKg = parsedInputValue;
-                                }
-
+                                // Folosim direct toStorage din enum ca să scăpăm de duplicarea factorului de conversie!
+                                double weightInKg = _currentSettings.unitSystem.toStorage(parsedInputValue);
                                 _saveSettings(
                                   AppSettings(
                                     unitSystem: _currentSettings.unitSystem,
                                     bodyWeight: weightInKg, // Salvat permanent în KG în baza de date!
                                     enableSoundEffects: _currentSettings.enableSoundEffects,
                                     theme: _currentSettings.theme,
+                                    enableAutoRestTimer: _currentSettings.enableAutoRestTimer,
+                                    defaultRestTimerDuration: _currentSettings.defaultRestTimerDuration,
                                   ),
                                 );
                               }
@@ -309,14 +314,131 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           const SizedBox(height: 16),
 
+          // --- 🆕 SECȚIUNEA: REST TIMER ⏱️ ---
+          _buildSectionHeader('Rest Timer'),
+          Card(
+            elevation: 0,
+            color: context.bg,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: context.borderMuted),
+            ),
+            child: Column(
+              children: [
+                // Comutator pentru pornire automată
+                SwitchListTile(
+                  secondary: Icon(Icons.auto_awesome_outlined, color: context.primary),
+                  title: Text(
+                    'Auto Start Timer',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: context.text,
+                    ),
+                  ),
+                  subtitle: Text(
+                    'Start rest after checking off a set',
+                    style: TextStyle(color: context.textMuted, fontSize: 12),
+                  ),
+                  value: _currentSettings.enableAutoRestTimer,
+                  onChanged: (bool value) {
+                    _saveSettings(
+                      AppSettings(
+                        unitSystem: _currentSettings.unitSystem,
+                        bodyWeight: _currentSettings.bodyWeight,
+                        enableSoundEffects: _currentSettings.enableSoundEffects,
+                        theme: _currentSettings.theme,
+                        enableAutoRestTimer: value,
+                        defaultRestTimerDuration: _currentSettings.defaultRestTimerDuration,
+                      ),
+                    );
+                  },
+                ),
+                Divider(
+                  height: 1,
+                  color: context.borderMuted,
+                  indent: 16,
+                  endIndent: 16,
+                ),
+                // Dropdown pentru durata de odihnă implicită (FĂRĂ OVERFLOW!)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                  child: Row(
+                    children: [
+                      Icon(Icons.hourglass_empty_rounded, color: context.primary),
+                      const SizedBox(width: 12),
+                      // 💡 Expanded forțează textele să ocupe doar spațiul disponibil și să nu dea push la Dropdown în afara ecranului
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Default Duration',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                                color: context.text,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              'Default rest in seconds', // Afișează clar că e în secunde
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: context.textMuted,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12), // Spațiu de siguranță între text și Dropdown
+                      DropdownButton<int>(
+                        value: _currentSettings.defaultRestTimerDuration,
+                        dropdownColor: context.bg,
+                        style: TextStyle(color: context.text, fontSize: 15),
+                        underline: const SizedBox(),
+                        borderRadius: BorderRadius.circular(8),
+                        menuMaxHeight: 250,
+                        items: _timerDurationOptions.map<DropdownMenuItem<int>>((int duration) {
+                          return DropdownMenuItem<int>(
+                            value: duration,
+                            child: Text('$duration s'), // ⏱️ Format direct în secunde (ex: "90 s")
+                          );
+                        }).toList(),
+                        onChanged: (int? newDuration) {
+                          if (newDuration != null) {
+                            _saveSettings(
+                              AppSettings(
+                                unitSystem: _currentSettings.unitSystem,
+                                bodyWeight: _currentSettings.bodyWeight,
+                                enableSoundEffects: _currentSettings.enableSoundEffects,
+                                theme: _currentSettings.theme,
+                                enableAutoRestTimer: _currentSettings.enableAutoRestTimer,
+                                defaultRestTimerDuration: newDuration,
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
           // --- SECȚIUNEA: ALTE SETĂRI ---
           _buildSectionHeader('Extra'),
           Card(
             elevation: 0,
-            color: context.bg.withOpacity(0.5),
+            color: context.bg,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: context.borderMuted.withOpacity(0.5)),
+              side: BorderSide(color: context.borderMuted),
             ),
             child: SwitchListTile(
               secondary: Icon(Icons.volume_up_outlined, color: context.primary),
@@ -336,6 +458,8 @@ class _SettingsPageState extends State<SettingsPage> {
                     bodyWeight: _currentSettings.bodyWeight,
                     enableSoundEffects: value,
                     theme: _currentSettings.theme,
+                    enableAutoRestTimer: _currentSettings.enableAutoRestTimer,
+                    defaultRestTimerDuration: _currentSettings.defaultRestTimerDuration,
                   ),
                 );
               },

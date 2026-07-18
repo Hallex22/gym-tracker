@@ -6,17 +6,25 @@ class AppSettings {
   final bool enableSoundEffects;
   final AppThemeMode theme;
 
-  const AppSettings(
-      {this.unitSystem = UnitSystem.kg,
-      this.bodyWeight = 75.0, // valoare implicită rezonabilă
-      this.enableSoundEffects = true,
-      this.theme = AppThemeMode.dark});
+  final bool enableAutoRestTimer;
+  final int defaultRestTimerDuration;
+
+  const AppSettings({
+    this.unitSystem = UnitSystem.kg,
+    this.bodyWeight = 75.0, // valoare implicită rezonabilă
+    this.enableSoundEffects = true,
+    this.theme = AppThemeMode.dark,
+    this.enableAutoRestTimer = false,
+    this.defaultRestTimerDuration = 90,
+  });
 
   Map<String, dynamic> toMap() => {
         'unitSystem': unitSystem.name,
         'bodyWeight': bodyWeight,
         'enableSoundEffects': enableSoundEffects,
         'theme': theme.name,
+        'enableAutoRestTimer': enableAutoRestTimer,
+        'defaultRestTimerDuration': defaultRestTimerDuration,
       };
 
   factory AppSettings.fromMap(Map<dynamic, dynamic> map) {
@@ -31,6 +39,8 @@ class AppSettings {
         (e) => e.name == map['theme'],
         orElse: () => AppThemeMode.dark,
       ),
+      enableAutoRestTimer: map['enableAutoRestTimer'] as bool? ?? false,
+      defaultRestTimerDuration: map['defaultRestTimerDuration'] as int? ?? 90,
     );
   }
 }

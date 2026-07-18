@@ -103,6 +103,7 @@ class WorkoutLog {
   String routineTitle;
   List<LoggedExercise> exercises;
   WorkoutStatus status;
+  String? notes;
 
   WorkoutLog({
     required this.startTime,
@@ -110,6 +111,7 @@ class WorkoutLog {
     required this.routineTitle,
     required this.exercises,
     required this.status,
+    this.notes,
   });
 
   Map<String, dynamic> toMap() => {
@@ -118,6 +120,7 @@ class WorkoutLog {
         'routineTitle': routineTitle,
         'exercises': exercises.map((e) => e.toMap()).toList(),
         'status': status.name,
+        'notes': notes,
       };
 
   factory WorkoutLog.fromMap(Map<dynamic, dynamic> map) {
@@ -132,6 +135,7 @@ class WorkoutLog {
         (e) => e.name == map['status'],
         orElse: () => WorkoutStatus.started,
       ),
+      notes: map['notes'] as String?
     );
   }
 

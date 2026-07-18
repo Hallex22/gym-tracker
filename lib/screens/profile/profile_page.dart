@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:gym_tracker/enums/workout_status.dart';
 import 'package:gym_tracker/screens/profile/settings_page.dart';
 import 'package:gym_tracker/screens/workout/workout_detail_page.dart';
+import 'package:gym_tracker/widgets/charts/weekly_activity_chart.dart';
 import '../../enums/enums.dart';
 import '../../models/app_settings.dart';
 import '../../models/models.dart';
 import '../../services/database_service.dart';
-import 'calendar_page.dart'; // 💡 Importă corect pagina de calendar (ajustează calea dacă e diferită)
+import '../../utils/date_utils.dart';
+import 'calendar_page.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -54,16 +55,6 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  String _formatDateNative(DateTime dt) {
-    final luni = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    final luna = luni[dt.month - 1];
-    final ziua = dt.day.toString().padLeft(2, '0');
-    final ora = dt.hour.toString().padLeft(2, '0');
-    final minut = dt.minute.toString().padLeft(2, '0');
-
-    return '$ziua $luna ${dt.year} • $ora:$minut';
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -71,7 +62,6 @@ class _ProfilePageState extends State<ProfilePage> {
         title: const Text('Workout History'),
         centerTitle: false,
         actions: [
-          // 💡 ICONIȚA DE CALENDAR ADAUGATĂ AICI
           IconButton(
             icon: const Icon(Icons.calendar_month_outlined),
             tooltip: 'View Calendar',
@@ -82,12 +72,11 @@ class _ProfilePageState extends State<ProfilePage> {
                   builder: (context) => const CalendarPage(),
                 ),
               );
-              // Când utilizatorul vine înapoi din calendar, dăm un refresh la date
               _loadWorkoutHistory();
             },
           ),
           IconButton(
-            icon: Icon(Icons.settings),
+            icon: const Icon(Icons.settings),
             onPressed: () async {
               await Navigator.push(
                 context,
@@ -98,10 +87,6 @@ class _ProfilePageState extends State<ProfilePage> {
               _loadUnitPreference();
             },
           ),
-          // IconButton(
-          //   icon: const Icon(Icons.refresh),
-          //   onPressed: _loadWorkoutHistory,
-          // )
         ],
       ),
       body: _finishedLogsWithKeys.isEmpty
@@ -119,195 +104,165 @@ class _ProfilePageState extends State<ProfilePage> {
                 ],
               ),
             )
-          : Column(
-              children: [
-                _buildGlobalStatsHeader(),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
+          : ListView.builder(
+              // 💡 Săptămâna + Titlul secundar + Istoricul de sesiuni = Lungimea totală a listei
+              itemCount: _finishedLogsWithKeys.length + 2,
+              padding: const EdgeInsets.only(left: 16, right: 16, bottom: 24),
+              itemBuilder: (context, index) {
+                // 1. Primul element din listă (Index 0) -> Graficul
+                if (index == 0) {
+                  return const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12.0),
+                    child: WeeklyActivityChart(weeksCount: 8),
+                  );
+                }
+
+                // 2. Al doilea element din listă (Index 1) -> Textul "Past Sessions"
+                if (index == 1) {
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 8.0, bottom: 12.0),
                     child: Text(
                       'Past Sessions',
-                      // style: Theme.of(context).textTheme.bodyMedium,
                       style: TextStyle(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
-                  ),
-                ),
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: _finishedLogsWithKeys.length,
-                    padding: const EdgeInsets.only(left: 16, right: 16, bottom: 16),
-                    itemBuilder: (context, index) {
-                      final entry = _finishedLogsWithKeys[index];
-                      final logKey = entry.key;
-                      final log = entry.value;
+                  );
+                }
 
-                      final String formattedDate = _formatDateNative(log.startTime);
+                // 3. Toate elementele următoare -> Cardurile cu antrenamente
+                // Ajustăm indexul cu -2 din cauza celor două elemente de header de mai sus
+                final entry = _finishedLogsWithKeys[index - 2];
+                final logKey = entry.key;
+                final log = entry.value;
+                final String formattedDate = formatDateNative(log.startTime);
 
-                      return Card(
-                        margin: const EdgeInsets.symmetric(vertical: 8.0),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(12),
-                          onTap: () async {
-                            await Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => WorkoutDetailPage(
-                                  logKey: logKey,
-                                  log: log,
-                                ),
-                              ),
-                            );
-                            _loadWorkoutHistory();
-                          },
-                          child: Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        log.routineTitle,
-                                        style: Theme.of(context).textTheme.titleLarge,
-                                      ),
-                                    ),
-                                    Icon(Icons.chevron_right,
-                                        color: Theme.of(context).colorScheme.onSurfaceVariant, size: 20),
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  formattedDate,
-                                  // style: Theme.of(context).textTheme.bodyMedium,
-                                  style: TextStyle(
-                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        'TIME',
-                                        style: TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w500,
-                                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                            letterSpacing: 0.5),
-                                      ),
-                                    ),
-                                    Expanded(
-                                      child: Text(
-                                        'VOLUME',
-                                        style: TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w500,
-                                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                            letterSpacing: 0.5),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Row(
-                                        children: [
-                                          Icon(Icons.access_time,
-                                              size: 16, color: Theme.of(context).colorScheme.onSurface),
-                                          const SizedBox(width: 6),
-                                          Text(
-                                            log.endTime != null ? log.formattedDuration : '0 min',
-                                            style: TextStyle(
-                                                fontSize: 15,
-                                                fontWeight: FontWeight.bold,
-                                                color: Theme.of(context).colorScheme.onSurface),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    Expanded(
-                                      child: Row(
-                                        children: [
-                                          Icon(Icons.fitness_center,
-                                              size: 16, color: Theme.of(context).colorScheme.onSurface),
-                                          const SizedBox(width: 6),
-                                          Text(
-                                            // '${log.totalVolume.toStringAsFixed(0)} kg',
-                                            _globalUnit.toFullDisplay(log.totalVolume),
-                                            style: TextStyle(
-                                                fontSize: 15,
-                                                fontWeight: FontWeight.bold,
-                                                color: Theme.of(context).colorScheme.onSurface),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
+                return Card(
+                  margin: const EdgeInsets.symmetric(vertical: 8.0),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => WorkoutDetailPage(
+                            logKey: logKey,
+                            log: log,
                           ),
                         ),
                       );
+                      _loadWorkoutHistory();
                     },
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  log.routineTitle,
+                                  style: Theme.of(context).textTheme.titleLarge,
+                                ),
+                              ),
+                              Icon(
+                                Icons.chevron_right,
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                size: 20,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            formattedDate,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              fontSize: 12,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'TIME',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child: Text(
+                                  'VOLUME',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.access_time,
+                                      size: 16,
+                                      color: Theme.of(context).colorScheme.onSurface,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      log.endTime != null ? log.formattedDuration : '0 min',
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.bold,
+                                        color: Theme.of(context).colorScheme.onSurface,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Expanded(
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.fitness_center,
+                                      size: 16,
+                                      color: Theme.of(context).colorScheme.onSurface,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      _globalUnit.toFullDisplay(log.totalVolume),
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.bold,
+                                        color: Theme.of(context).colorScheme.onSurface,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
-              ],
+                );
+              },
             ),
-    );
-  }
-
-  Widget _buildGlobalStatsHeader() {
-    final int totalWorkouts = _finishedLogsWithKeys.length;
-    double globalVolume = 0;
-
-    for (var entry in _finishedLogsWithKeys) {
-      globalVolume += entry.value.totalVolume;
-    }
-
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.all(16.0),
-      padding: const EdgeInsets.all(16.0),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.primary.withOpacity(0.08),
-        border: Border.all(color: Theme.of(context).colorScheme.primary.withOpacity(0.15)),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          Column(
-            children: [
-              Text('Total Sessions',
-                  style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-              const SizedBox(height: 4),
-              Text('$totalWorkouts', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-            ],
-          ),
-          Container(width: 1, height: 35, color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.2)),
-          Column(
-            children: [
-              Text('Total Volume Lifted',
-                  style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-              const SizedBox(height: 4),
-              Text(_globalUnit.toFullDisplay(globalVolume),
-                  style: TextStyle(
-                      fontSize: 22, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.secondary)),
-            ],
-          ),
-        ],
-      ),
     );
   }
 }
