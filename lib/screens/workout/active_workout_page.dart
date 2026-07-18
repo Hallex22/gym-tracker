@@ -26,11 +26,14 @@ class ActiveWorkoutPage extends StatefulWidget {
 
 class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
   final List<LoggedExercise> _activeExercises = [];
+  bool _isGlobalReordering = false;
   dynamic _currentLogKey;
   late DateTime _sessionStart;
   Timer? _liveTimer;
 
-  late TextEditingController _titleController;
+  final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _notesController = TextEditingController();
+  final ScrollController _workoutScrollController = ScrollController();
 
   // 🔧 Cache exercitiu-complet indexat dupa id (Exercise.id -> Exercise).
   late Map<int, Exercise> _exerciseCache;
@@ -56,7 +59,8 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
   @override
   void initState() {
     super.initState();
-    _titleController = TextEditingController(text: widget.routine.title);
+    _titleController.text = widget.routine.title;
+    _notesController.text = '';
     _loadGlobalSettings();
     _buildExerciseCache();
     _loadOrInitializeWorkout();
@@ -67,6 +71,8 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
   void dispose() {
     _liveTimer?.cancel();
     _titleController.dispose();
+    _notesController.dispose();
+    _workoutScrollController.dispose();
     super.dispose();
   }
 
@@ -316,12 +322,14 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
       _currentLogKey = existingActiveEntry.key;
       _sessionStart = activeLog.startTime;
       _titleController.text = activeLog.routineTitle;
+      _notesController.text = activeLog.notes ?? '';
 
       setState(() {
         _activeExercises.addAll(activeLog.exercises);
       });
     } else {
       _sessionStart = DateTime.now();
+      _notesController.text = '';
       for (var routineExercise in widget.routine.exercises) {
         final exerciseId = routineExercise.exerciseId;
         final targetSets = routineExercise.targetSetsCount > 0 ? routineExercise.targetSetsCount : 1;
@@ -348,6 +356,7 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
       routineTitle: _titleController.text.trim(),
       exercises: List.from(_activeExercises),
       status: WorkoutStatus.started,
+      notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
     );
     _currentLogKey = await DatabaseService.logsBox.add(initialLog.toMap());
   }
@@ -359,6 +368,7 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
       routineTitle: _titleController.text.trim(),
       exercises: List.from(_activeExercises),
       status: WorkoutStatus.started,
+      notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
     );
     await DatabaseService.logsBox.put(_currentLogKey, currentLog.toMap());
   }
@@ -582,6 +592,7 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
       routineTitle: finalTitle,
       exercises: List.from(_activeExercises),
       status: WorkoutStatus.finished,
+      notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
     );
 
     await DatabaseService.logsBox.put(_currentLogKey, finalLog.toMap());
@@ -661,6 +672,50 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
     );
   }
 
+  Widget _buildMiniExerciseCard(String displayName, String? coverImage, ThemeData theme) {
+    final isImageEmpty = coverImage == null || coverImage.isEmpty;
+
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      color: theme.cardColor.withOpacity(0.95), // Ușor transparent ca să arate bine când plutește
+      elevation: 6,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Icon(Icons.drag_handle, color: theme.colorScheme.onSurfaceVariant),
+            const SizedBox(width: 12),
+            if (!isImageEmpty) ...[
+              CircleAvatar(
+                radius: 16,
+                backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                backgroundImage: AssetImage('assets/$coverImage'),
+              ),
+              const SizedBox(width: 12),
+            ],
+            Expanded(
+              child: Text(
+                displayName,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.onSurface,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Icon(
+              Icons.unfold_more_rounded,
+              size: 18,
+              color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -727,9 +782,10 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
               padding: const EdgeInsets.only(right: 12.0),
               child: SizedBox(
                 width: 100,
-                height: 50,
+                height: 40,
                 child: AppFilledButton(
                   label: 'Save',
+                  height: 40,
                   onPressed: _showFinishConfirmationDialog,
                 ),
               ),
@@ -756,11 +812,44 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                   ],
                 ),
               ),
+
+              // TODO - de adaugat rand de input pentru workout log
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 8, 24, 2),
+                child: TextFormField(
+                  controller: _notesController,
+                  maxLines: null, // Îi permite să se extindă în jos dacă scrii mult
+                  style: TextStyle(
+                    fontSize: 14,
+                    // color: theme.colorScheme.onSurface.withOpacity(0.9),
+                    color: context.text.withOpacity(0.9),
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'Add a general note for this workout...',
+                    hintStyle: TextStyle(
+                      fontSize: 12,
+                      color: context.textMuted.withOpacity(0.5),
+                    ),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 6),
+                    border: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    errorBorder: InputBorder.none,
+                    disabledBorder: InputBorder.none,
+                    // Opțional: poți pune un mic icon finuț în stânga dacă vrei, dar ai zis fără bordere/curat
+                    icon: Icon(Icons.sticky_note_2_outlined, size: 16, color: context.textMuted.withOpacity(0.5)),
+                  ),
+                  onChanged: (value) =>
+                      _updateLiveProgress(), // ⚡ Sincronizare automată în Hive la fiecare literă tastată!
+                ),
+              ),
+
               Expanded(
                 child: _activeExercises.isEmpty
                     ? Center(
                         child: Padding(
-                          padding: const EdgeInsets.all(24.0),
+                          padding: const EdgeInsets.fromLTRB(24, 0, 24, 4),
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -791,7 +880,42 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                         ),
                       )
                     : ReorderableListView.builder(
+                        scrollController: _workoutScrollController,
                         itemCount: _activeExercises.length,
+                        proxyDecorator: (Widget child, int index, Animation<double> animation) {
+                          final exercise = _activeExercises[index];
+                          final fullExercise = _resolveExercise(exercise.exerciseId);
+                          final displayName = fullExercise?.name ?? 'Exercițiu necunoscut';
+                          final coverImage = fullExercise?.coverImage;
+
+                          // Înlocuim widget-ul uriaș din mână cu versiunea mini compilată special pentru drag
+                          return AnimatedBuilder(
+                            animation: animation,
+                            builder: (context, _) {
+                              // Păstrăm o ușoară animație de elevație/scalare nativă pentru feedback vizual
+                              return _buildMiniExerciseCard(displayName, coverImage, theme);
+                            },
+                          );
+                        },
+                        onReorderStart: (index) {
+                          setState(() {
+                            _isGlobalReordering = true;
+                          });
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (_workoutScrollController.hasClients) {
+                              _workoutScrollController.animateTo(
+                                0.0, // Poziția de sus de tot
+                                duration: const Duration(milliseconds: 150), // Animație foarte rapidă
+                                curve: Curves.easeOutCubic,
+                              );
+                            }
+                          });
+                        },
+                        onReorderEnd: (index) {
+                          setState(() {
+                            _isGlobalReordering = false;
+                          });
+                        },
                         onReorder: (oldIndex, newIndex) {
                           setState(() {
                             if (newIndex > oldIndex) newIndex -= 1;
@@ -821,6 +945,12 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
 
                           // Starea curentă a checkmark-ului (isCompleted) pentru întreg cardul
                           final isExerciseFinished = _exerciseCompletedStatus[exercise.exerciseId] ?? false;
+
+                          if (_isGlobalReordering) {
+                            return KeyedSubtree(
+                                key: ValueKey('active_ex_compact_${exercise.exerciseId}_$exIndex'),
+                                child: _buildMiniExerciseCard(displayName, coverImage, theme));
+                          }
 
                           return Card(
                             key: ValueKey('active_ex_${exercise.exerciseId}_$exIndex'),

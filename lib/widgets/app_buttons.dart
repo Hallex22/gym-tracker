@@ -6,6 +6,7 @@ class AppFilledButton extends StatelessWidget {
   final VoidCallback onPressed;
   final IconData? icon;
   final Color? backgroundColor;
+  final double? height; // Opțional
 
   const AppFilledButton({
     super.key,
@@ -13,16 +14,22 @@ class AppFilledButton extends StatelessWidget {
     required this.onPressed,
     this.icon,
     this.backgroundColor,
+    this.height, // Îl lăsăm simplu, fără valoare implicită aici ca să accepte null direct
   });
 
   @override
   Widget build(BuildContext context) {
+    // Dacă height este null, facem fallback pe valoarea ta standard de 50
+    final double buttonHeight = height ?? 50;
+
     final style = ElevatedButton.styleFrom(
       backgroundColor: backgroundColor ?? Theme.of(context).colorScheme.primary,
       foregroundColor: Theme.of(context).colorScheme.onPrimary,
-      minimumSize: const Size(double.infinity, 50),
+      minimumSize: Size(double.infinity, buttonHeight), // Folosim valoarea garantată non-null
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       elevation: 0,
+      // Verificăm buttonHeight în loc de parametrul opțional height
+      padding: buttonHeight < 45 ? const EdgeInsets.symmetric(horizontal: 16, vertical: 0) : null,
     );
 
     if (icon != null) {
@@ -30,16 +37,26 @@ class AppFilledButton extends StatelessWidget {
         style: style,
         onPressed: onPressed,
         icon: Icon(icon, size: 20),
-        label: Text(label,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+        label: Text(
+          label,
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: buttonHeight < 45 ? 14 : 15,
+          ),
+        ),
       );
     }
 
     return ElevatedButton(
       style: style,
       onPressed: onPressed,
-      child: Text(label,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: buttonHeight < 45 ? 14 : 15,
+        ),
+      ),
     );
   }
 }
@@ -61,8 +78,7 @@ class AppOutlinedButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final style = OutlinedButton.styleFrom(
       minimumSize: const Size(double.infinity, 50),
-      side: BorderSide(
-          color: Theme.of(context).colorScheme.primary.withOpacity(0.5)),
+      side: BorderSide(color: Theme.of(context).colorScheme.primary.withOpacity(0.5)),
       foregroundColor: Theme.of(context).colorScheme.primary,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     );
@@ -72,16 +88,14 @@ class AppOutlinedButton extends StatelessWidget {
         style: style,
         onPressed: onPressed,
         icon: Icon(icon, size: 20),
-        label: Text(label,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+        label: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
       );
     }
 
     return OutlinedButton(
       style: style,
       onPressed: onPressed,
-      child: Text(label,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+      child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
     );
   }
 }
@@ -91,8 +105,7 @@ class AppGhostButton extends StatelessWidget {
   final String label;
   final VoidCallback onPressed;
   final IconData? icon;
-  final Color?
-      customColor; // Opțional, dacă vrei altceva în afară de primary (ex: Colors.red pentru Delete)
+  final Color? customColor; // Opțional, dacă vrei altceva în afară de primary (ex: Colors.red pentru Delete)
 
   const AppGhostButton({
     super.key,
@@ -118,16 +131,14 @@ class AppGhostButton extends StatelessWidget {
         style: style,
         onPressed: onPressed,
         icon: Icon(icon, size: 18),
-        label: Text(label,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+        label: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
       );
     }
 
     return TextButton(
       style: style,
       onPressed: onPressed,
-      child: Text(label,
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+      child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
     );
   }
 }
