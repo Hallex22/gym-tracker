@@ -17,6 +17,7 @@ dependencies:
   url_launcher: ^6.3.2
   hive_ce_flutter: ^2.3.4
   fl_chart: ^0.69.0
+  audioplayers: ^6.0.0
 
 dev_dependencies:
   flutter_test:
@@ -35,6 +36,7 @@ flutter:
   assets:
     - assets/exercises_init.json
     - assets/images/
+    - assets/sounds/timer_finished.wav
 
   fonts:
     - family: Iner

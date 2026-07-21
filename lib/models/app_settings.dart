@@ -2,8 +2,8 @@ import '../enums/enums.dart';
 
 class AppSettings {
   final UnitSystem unitSystem;
-  final double bodyWeight;
   final bool enableSoundEffects;
+  final bool enableHapticFeedback;
   final AppThemeMode theme;
 
   final bool enableAutoRestTimer;
@@ -11,8 +11,8 @@ class AppSettings {
 
   const AppSettings({
     this.unitSystem = UnitSystem.kg,
-    this.bodyWeight = 75.0, // valoare implicită rezonabilă
     this.enableSoundEffects = true,
+    this.enableHapticFeedback = true,
     this.theme = AppThemeMode.dark,
     this.enableAutoRestTimer = false,
     this.defaultRestTimerDuration = 90,
@@ -20,7 +20,7 @@ class AppSettings {
 
   Map<String, dynamic> toMap() => {
         'unitSystem': unitSystem.name,
-        'bodyWeight': bodyWeight,
+        'enableHapticFeedback': enableHapticFeedback,
         'enableSoundEffects': enableSoundEffects,
         'theme': theme.name,
         'enableAutoRestTimer': enableAutoRestTimer,
@@ -33,8 +33,8 @@ class AppSettings {
         (e) => e.name == map['unitSystem'],
         orElse: () => UnitSystem.kg,
       ),
-      bodyWeight: (map['bodyWeight'] as num?)?.toDouble() ?? 75.0,
       enableSoundEffects: map['enableSoundEffects'] as bool? ?? true,
+      enableHapticFeedback: map['enableHapticFeedback'] as bool? ?? true,
       theme: AppThemeMode.values.firstWhere(
         (e) => e.name == map['theme'],
         orElse: () => AppThemeMode.dark,

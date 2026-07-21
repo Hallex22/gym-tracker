@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:gym_tracker/enums/enums.dart'; // Asigură-te că importul conține UnitSystem
 import 'package:gym_tracker/models/app_settings.dart';
+import 'package:gym_tracker/theme/app_theme.dart';
 import 'package:gym_tracker/utils/date_utils.dart';
 import 'package:gym_tracker/widgets/top_toast.dart';
 import '../../models/models.dart';
@@ -25,6 +26,7 @@ class WorkoutDetailPage extends StatefulWidget {
 
 class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
   late WorkoutLog _currentLog;
+  final double myBodyWeight = DatabaseService.getLatestBodyweightInKg();
 
   // 🆕 Unitatea de măsură globală
   UnitSystem _globalUnit = UnitSystem.kg;
@@ -269,7 +271,7 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Workout Summary'),
-        centerTitle: false,
+        centerTitle: true,
         actions: [
           IconButton(
             icon: const Icon(Icons.more_vert, size: 26),
@@ -288,7 +290,12 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
               _currentLog.routineTitle,
               style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 6),
+            if (_currentLog.notes != null && _currentLog.notes!.trim().isNotEmpty) ...[
+              Text(_currentLog.notes!,
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.normal, color: context.textMuted, fontStyle: FontStyle.italic)),
+              const SizedBox(height: 6),
+            ],
             Row(
               children: [
                 Icon(Icons.calendar_today, size: 14, color: theme.colorScheme.onSurfaceVariant),

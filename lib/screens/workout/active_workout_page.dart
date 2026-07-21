@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/services.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:gym_tracker/extensions/string_extension.dart';
@@ -55,6 +56,7 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
 
   // Generăm o listă de secunde din 5 în 5, de la 5 secunde până la 10 minute (600 secunde)
   final List<int> _wheelTimerOptions = List.generate(120, (index) => (index + 1) * 5);
+  double myBodyWeight = DatabaseService.getLatestBodyweightInKg();
 
   @override
   void initState() {
@@ -74,6 +76,12 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
     _notesController.dispose();
     _workoutScrollController.dispose();
     super.dispose();
+  }
+
+  void _reloadBodyweight() {
+    setState(() {
+      myBodyWeight = DatabaseService.getLatestBodyweightInKg();
+    });
   }
 
   void _loadGlobalSettings() {
@@ -475,12 +483,14 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
     String durationString =
         hours > 0 ? '${hours.toString().padLeft(2, '0')}:${minutes}:${seconds}' : '${minutes}:${seconds}';
 
+    final totalVol = currentSnapshotLog.totalVolume;
+
     return {
       'durationStr': durationString,
       'durationMin': difference.inMinutes,
       'exercisesCount': _activeExercises.length,
-      'volume': currentSnapshotLog.totalVolume,
-      'volumeStr': '${_formatWeight(_globalUnit.toDisplay(currentSnapshotLog.totalVolume))} ${_globalUnit.label}',
+      'volume': totalVol,
+      'volumeStr': '${_formatWeight(_globalUnit.toDisplay(totalVol))} ${_globalUnit.label}',
       'setsCount': currentSnapshotLog.completedSetsCount
     };
   }
@@ -626,10 +636,16 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
     if (selectedExercises != null && selectedExercises.isNotEmpty && mounted) {
       setState(() {
         for (final ex in selectedExercises) {
+          final initialWeight = LoggedSet.calculateEffectiveWeight(
+            typedWeight: 0.0,
+            equipment: ex.equipment,
+            currentBodyweight: myBodyWeight,
+          );
+
           _activeExercises.add(
             LoggedExercise(
               exerciseId: ex.id,
-              sets: [const LoggedSet(weight: 0.0, reps: 0)],
+              sets: [LoggedSet(weight: initialWeight, reps: 0)],
             ),
           );
         }
@@ -713,6 +729,212 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
           ],
         ),
       ),
+    );
+  }
+
+  void _showActiveBodyweightModal() {
+    // Preluăm valoarea curentă convertită pentru afișarea în unitatea din app (kg/lbs)
+    final double currentDisplayVal = _globalUnit.toDisplay(myBodyWeight);
+    final unitSystem = DatabaseService.globalUnit;
+
+    final controller = TextEditingController(
+      text: unitSystem.formatWeight(currentDisplayVal),
+    );
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: context.bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (modalContext) {
+        return Padding(
+          padding: EdgeInsets.only(
+            top: 12,
+            left: 20,
+            right: 20,
+            bottom: MediaQuery.of(modalContext).viewInsets.bottom + 20,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // 1. Drag Handle
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: context.borderMuted,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // 2. Header & Subtitlu
+              Center(
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.scale_outlined, color: context.primary, size: 22),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Update Body Weight',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: context.text,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Will update current workout volume & log new weight',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: context.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // 3. Card cu greutatea curentă detectată
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: context.bgDark.withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: context.borderMuted.withOpacity(0.5)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Current Active Weight',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: context.textMuted,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    Text(
+                      '${unitSystem.formatWeight(currentDisplayVal)} ${_globalUnit.label}',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: context.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // 4. Input pentru greutatea nouă
+              TextField(
+                controller: controller,
+                autofocus: true,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                ],
+                style: TextStyle(color: context.text, fontWeight: FontWeight.bold),
+                decoration: InputDecoration(
+                  labelText: 'New Weight (${_globalUnit.label})',
+                  labelStyle: TextStyle(color: context.textMuted),
+                  suffixText: _globalUnit.label,
+                  filled: true,
+                  fillColor: context.bgDark.withOpacity(0.3),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: context.borderMuted),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: context.borderMuted.withOpacity(0.5)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide(color: context.primary, width: 2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // 5. Butonul principal de salvare
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: context.primary,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  onPressed: () async {
+                    final double? parsedVal = double.tryParse(controller.text.trim());
+
+                    if (parsedVal != null && parsedVal > 0) {
+                      // Conversion display unit -> KG for database storage
+                      final double newWeightInKg = _globalUnit.toStorage(parsedVal);
+
+                      // 1. Apelăm funcția din service pentru salvare în bodyweightBox
+                      await DatabaseService.saveBodyweight(newWeightInKg);
+
+                      // 2. Actualizăm starea antrenamentului activ
+                      if (mounted) {
+                        setState(() {
+                          myBodyWeight = newWeightInKg;
+
+                          // Recalculăm toate seturile de Bodyweight cu noua greutate
+                          for (var exercise in _activeExercises) {
+                            final fullEx = _resolveExercise(exercise.exerciseId);
+
+                            if (fullEx?.equipment == Equipment.bodyweight) {
+                              for (int i = 0; i < exercise.sets.length; i++) {
+                                final set = exercise.sets[i];
+                                exercise.sets[i] = LoggedSet(
+                                  weight: newWeightInKg,
+                                  reps: set.reps,
+                                  type: set.type,
+                                  isCompleted: set.isCompleted,
+                                );
+                              }
+                            }
+                          }
+                        });
+
+                        _reloadBodyweight();
+                        _updateLiveProgress(); // Recalculează volumul antrenamentului în UI
+                        Navigator.pop(modalContext);
+                      }
+                    }
+                  },
+                  icon: const Icon(Icons.check_rounded, size: 20),
+                  label: const Text(
+                    'Update Weight',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -813,7 +1035,7 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                 ),
               ),
 
-              // TODO - de adaugat rand de input pentru workout log
+              // Notes
               Padding(
                 padding: const EdgeInsets.fromLTRB(24, 8, 24, 2),
                 child: TextFormField(
@@ -1434,14 +1656,29 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                                             child: Padding(
                                               padding: const EdgeInsets.symmetric(horizontal: 4.0),
                                               child: isBodyWeight
-                                                  ? Container(
-                                                      alignment: Alignment.center,
-                                                      padding: const EdgeInsets.symmetric(vertical: 10),
-                                                      child: Text(
-                                                        'BW',
-                                                        style: TextStyle(
-                                                            fontWeight: FontWeight.w600,
-                                                            color: theme.colorScheme.onSurface),
+                                                  ? Center(
+                                                      child: InkWell(
+                                                        borderRadius: BorderRadius.circular(8),
+                                                        onTap: _showActiveBodyweightModal,
+                                                        child: Container(
+                                                          padding:
+                                                              const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                                          decoration: BoxDecoration(
+                                                            color: theme.colorScheme.primary.withOpacity(0.08),
+                                                            borderRadius: BorderRadius.circular(6),
+                                                            border: Border.all(
+                                                              color: theme.colorScheme.primary.withOpacity(0.3),
+                                                            ),
+                                                          ),
+                                                          child: Text(
+                                                            'BW',
+                                                            style: TextStyle(
+                                                              fontWeight: FontWeight.bold,
+                                                              fontSize: 12,
+                                                              color: theme.colorScheme.primary,
+                                                            ),
+                                                          ),
+                                                        ),
                                                       ),
                                                     )
                                                   : TextFormField(
@@ -1470,13 +1707,21 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                                                                   theme.colorScheme.onSurfaceVariant.withOpacity(0.8))),
                                                       onChanged: (value) {
                                                         final typedDisplay = double.tryParse(value) ?? 0.0;
-                                                        final weightInKg = unit.toStorage(typedDisplay);
-                                                        exercise.sets[setIndex] = LoggedSet(
-                                                          weight: weightInKg,
-                                                          reps: set.reps,
-                                                          type: set.type,
-                                                          isCompleted: set.isCompleted,
-                                                        );
+                                                        final rawInputWeightInKg = unit.toStorage(typedDisplay);
+
+                                                        final effectiveWeight = LoggedSet.calculateEffectiveWeight(
+                                                            typedWeight: rawInputWeightInKg,
+                                                            equipment: fullExercise?.equipment ?? Equipment.barbell,
+                                                            currentBodyweight: myBodyWeight);
+
+                                                        setState(() {
+                                                          exercise.sets[setIndex] = LoggedSet(
+                                                            weight: effectiveWeight,
+                                                            reps: set.reps,
+                                                            type: set.type,
+                                                            isCompleted: set.isCompleted,
+                                                          );
+                                                        });
                                                         _updateLiveProgress();
                                                       },
                                                     ),
@@ -1486,35 +1731,44 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                                             child: Padding(
                                               padding: const EdgeInsets.symmetric(horizontal: 4.0),
                                               child: TextFormField(
-                                                controller: repsController,
-                                                textAlign: TextAlign.center,
-                                                keyboardType: TextInputType.number,
-                                                style: TextStyle(
-                                                    fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface),
-                                                decoration: InputDecoration(
-                                                    border: InputBorder.none,
-                                                    enabledBorder: InputBorder.none,
-                                                    focusedBorder: InputBorder.none,
-                                                    disabledBorder: InputBorder.none,
-                                                    errorBorder: InputBorder.none,
-                                                    focusedErrorBorder: InputBorder.none,
-                                                    contentPadding:
-                                                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                                    hintText: prevReps > 0 ? '$prevReps' : '0',
-                                                    hintStyle: TextStyle(
-                                                        fontWeight: FontWeight.normal,
-                                                        color: theme.colorScheme.onSurfaceVariant.withOpacity(0.8))),
-                                                onChanged: (value) {
-                                                  final newReps = int.tryParse(value) ?? 0;
-                                                  exercise.sets[setIndex] = LoggedSet(
-                                                    weight: set.weight,
-                                                    reps: newReps,
-                                                    type: set.type,
-                                                    isCompleted: set.isCompleted,
-                                                  );
-                                                  _updateLiveProgress();
-                                                },
-                                              ),
+                                                  controller: repsController,
+                                                  textAlign: TextAlign.center,
+                                                  keyboardType: TextInputType.number,
+                                                  style: TextStyle(
+                                                      fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface),
+                                                  decoration: InputDecoration(
+                                                      border: InputBorder.none,
+                                                      enabledBorder: InputBorder.none,
+                                                      focusedBorder: InputBorder.none,
+                                                      disabledBorder: InputBorder.none,
+                                                      errorBorder: InputBorder.none,
+                                                      focusedErrorBorder: InputBorder.none,
+                                                      contentPadding:
+                                                          const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                      hintText: prevReps > 0 ? '$prevReps' : '0',
+                                                      hintStyle: TextStyle(
+                                                          fontWeight: FontWeight.normal,
+                                                          color: theme.colorScheme.onSurfaceVariant.withOpacity(0.8))),
+                                                  onChanged: (value) {
+                                                    final newReps = int.tryParse(value) ?? 0;
+
+                                                    // Calculăm greutatea efectivă (dacă weight e 0.0 și exercițiul e Bodyweight, va deveni myBodyWeight)
+                                                    final currentEffectiveWeight = LoggedSet.calculateEffectiveWeight(
+                                                      typedWeight: isBodyWeight ? 0.0 : set.weight,
+                                                      equipment: fullExercise?.equipment ?? Equipment.barbell,
+                                                      currentBodyweight: myBodyWeight,
+                                                    );
+
+                                                    setState(() {
+                                                      exercise.sets[setIndex] = LoggedSet(
+                                                        weight: currentEffectiveWeight,
+                                                        reps: newReps,
+                                                        type: set.type,
+                                                        isCompleted: set.isCompleted,
+                                                      );
+                                                    });
+                                                    _updateLiveProgress();
+                                                  }),
                                             ),
                                           ),
                                           Expanded(
@@ -1566,17 +1820,26 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                                         children: [
                                           Expanded(
                                             child: AppGhostButton(
-                                              label: 'Add Set',
-                                              icon: Icons.add,
-                                              onPressed: () {
-                                                setState(() {
-                                                  double lastWeight = sets.isNotEmpty ? sets.last.weight : 0.0;
-                                                  int lastReps = sets.isNotEmpty ? sets.last.reps : 0;
-                                                  sets.add(LoggedSet(weight: lastWeight, reps: lastReps));
-                                                });
-                                                _updateLiveProgress();
-                                              },
-                                            ),
+                                                label: 'Add Set',
+                                                icon: Icons.add,
+                                                onPressed: () {
+                                                  setState(() {
+                                                    int lastReps = sets.isNotEmpty ? sets.last.reps : 0;
+                                                    double lastWeight = sets.isNotEmpty ? sets.last.weight : 0.0;
+
+                                                    // Dacă este primul set la Bodyweight și era pe 0, îi dăm greutatea corporală
+                                                    if (isBodyWeight && lastWeight == 0.0) {
+                                                      lastWeight = LoggedSet.calculateEffectiveWeight(
+                                                        typedWeight: 0.0,
+                                                        equipment: Equipment.bodyweight,
+                                                        currentBodyweight: myBodyWeight,
+                                                      );
+                                                    }
+
+                                                    sets.add(LoggedSet(weight: lastWeight, reps: lastReps));
+                                                  });
+                                                  _updateLiveProgress();
+                                                }),
                                           ),
                                           if (sets.length > 1)
                                             TextButton(

@@ -172,7 +172,7 @@ class _ExerciseExplorePageState extends State<ExerciseExplorePage> {
                                   setState(() => _searchQuery = ''),
                             )
                           : null,
-                      border: const OutlineInputBorder(),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                       contentPadding: const EdgeInsets.symmetric(vertical: 8),
                     ),
                     onChanged: (value) => setState(() => _searchQuery = value),
@@ -298,7 +298,7 @@ class _ExerciseExplorePageState extends State<ExerciseExplorePage> {
                           margin: const EdgeInsets.symmetric(vertical: 4),
                           elevation: 0,
                           child: InkWell(
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(12),
                             onTap: () {
                               Navigator.push(
                                 context,

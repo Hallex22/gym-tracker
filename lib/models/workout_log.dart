@@ -1,8 +1,9 @@
-// Model pentru un singur set efectuat si salvat in istoric
 import '../enums/enums.dart';
 
+// -------------------------------------
+// Model pentru un singur set efectuat si salvat in istoric
 class LoggedSet {
-  final double weight;
+  final double weight; // Conține deja greutatea efectivă (Ex: 75kg bodyweight + 0kg extra = 75.0)
   final int reps;
   final SetType type;
   final bool isCompleted;
@@ -31,14 +32,28 @@ class LoggedSet {
         isCompleted: map['isCompleted'] as bool? ?? false,
       );
 
-  double get setVolume {
-    double volume = 0;
-    volume += weight * reps;
-    return volume;
+  /// Volum direct: Greutate x Repetări
+  double get setVolume => weight * reps;
+
+  /// Helper static apelat din UI pentru calculat greutatea ce urmează a fi salvată
+  static double calculateEffectiveWeight({
+    required double typedWeight,
+    required Equipment equipment,
+    required double currentBodyweight,
+  }) {
+    switch (equipment) {
+      case Equipment.bodyweight:
+        return currentBodyweight + typedWeight;
+      // În caz de exerciții asistate pe viitor:
+      // case Equipment.assisted:
+      //   return (currentBodyweight - typedWeight) > 0 ? currentBodyweight - typedWeight : 0.0;
+      default:
+        return typedWeight;
+    }
   }
 }
 
-//  -------------------------------------
+// -------------------------------------
 // Model pentru exercitiu logat
 class LoggedExercise {
   final int exerciseId;
@@ -62,33 +77,34 @@ class LoggedExercise {
     );
   }
 
-  // Metode pe LoggedExercise
+  /// Volumul total pe exercițiu (doar seturile cu reps > 0 și care NU sunt warmup)
   double get exerciseVolume {
     double volume = 0;
     for (var set in sets) {
-      if (set.type != SetType.warmup) {
+      if (set.reps > 0 && set.type != SetType.warmup) {
         volume += set.setVolume;
       }
     }
     return volume;
   }
 
+  /// Numărul de seturi valide executate (reps > 0 și non-warmup)
   int get completedSetsCount {
-    int count = 0;
-    count += sets.where((set) => set.reps > 0 && set.type != SetType.warmup).length;
-    return count;
+    return sets.where((set) => set.reps > 0 && set.type != SetType.warmup).length;
   }
 
+  /// Greutatea maximă ridicată în cadrul exercițiului
   double get maxWeight {
-    if (sets.isEmpty) return 0.0;
-    return sets.map((s) => s.weight).reduce((a, b) => a > b ? a : b);
+    final validSets = sets.where((s) => s.reps > 0 && s.type != SetType.warmup).toList();
+    if (validSets.isEmpty) return 0.0;
+    return validSets.map((s) => s.weight).reduce((a, b) => a > b ? a : b);
   }
 
+  /// Estimare 1RM pe baza celei mai bune performanțe
   double get estimated1RM {
-    if (sets.isEmpty) return 0.0;
     double highest1RM = 0.0;
     for (var set in sets) {
-      if (set.reps > 0) {
+      if (set.reps > 0 && set.type != SetType.warmup) {
         double current1RM = set.weight * (1 + set.reps / 30.0);
         if (current1RM > highest1RM) highest1RM = current1RM;
       }
@@ -97,6 +113,8 @@ class LoggedExercise {
   }
 }
 
+// -------------------------------------
+// Model pentru antrenamentul întreg
 class WorkoutLog {
   DateTime startTime;
   DateTime? endTime;
@@ -135,17 +153,16 @@ class WorkoutLog {
         (e) => e.name == map['status'],
         orElse: () => WorkoutStatus.started,
       ),
-      notes: map['notes'] as String?
+      notes: map['notes'] as String?,
     );
   }
 
-  // -----------------------------
-  // Metode specifice
   int get durationInMinutes {
     if (endTime == null) return 0;
     return endTime!.difference(startTime).inMinutes;
   }
 
+  /// Volumul total al antrenamentului (adună direct ex.exerciseVolume)
   double get totalVolume {
     double volume = 0;
     for (var ex in exercises) {
@@ -154,6 +171,7 @@ class WorkoutLog {
     return volume;
   }
 
+  /// Numărul total de seturi introduse
   int get totalSetsCount {
     int count = 0;
     for (var ex in exercises) {
@@ -162,6 +180,7 @@ class WorkoutLog {
     return count;
   }
 
+  /// Numărul total de seturi valide (reps > 0 și fără warmup)
   int get completedSetsCount {
     int count = 0;
     for (var ex in exercises) {

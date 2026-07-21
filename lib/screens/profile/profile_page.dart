@@ -19,6 +19,7 @@ class ProfilePage extends StatefulWidget {
 class _ProfilePageState extends State<ProfilePage> {
   List<MapEntry<dynamic, WorkoutLog>> _finishedLogsWithKeys = [];
   late UnitSystem _globalUnit;
+  final double myBodyWeight = DatabaseService.getLatestBodyweightInKg();
 
   @override
   void initState() {

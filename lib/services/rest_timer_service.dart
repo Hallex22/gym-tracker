@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:gym_tracker/services/database_service.dart';
 
 enum TimerState { idle, running, paused, finished }
 
@@ -8,12 +10,16 @@ class RestTimerService extends ChangeNotifier {
   // Singleton Pattern pentru a-l accesa ușor de oriunde
   static final RestTimerService _instance = RestTimerService._internal();
   factory RestTimerService() => _instance;
-  RestTimerService._internal();
+  RestTimerService._internal() {
+    _initAudioContext();
+  }
 
   Timer? _timer;
   int _durationInSeconds = 90; // Valoarea implicită (1:30)
   int _remainingSeconds = 0;
   TimerState _state = TimerState.idle;
+
+  final AudioPlayer _audioPlayer = AudioPlayer();
 
   // Gettere pentru UI
   int get remainingSeconds => _remainingSeconds;
@@ -25,6 +31,30 @@ class RestTimerService extends ChangeNotifier {
     final minutes = _remainingSeconds ~/ 60;
     final seconds = _remainingSeconds % 60;
     return '${minutes.toString().padLeft(1, '0')}:${seconds.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _initAudioContext() async {
+    final context = AudioContext(
+      iOS: AudioContextIOS(
+        category: AVAudioSessionCategory.ambient,
+        options: {
+          AVAudioSessionOptions.duckOthers,
+        },
+      ),
+      android: AudioContextAndroid(
+        audioMode: AndroidAudioMode.normal,
+        audioFocus: AndroidAudioFocus.gainTransientMayDuck,
+        contentType: AndroidContentType.sonification,
+        usageType: AndroidUsageType.notification,
+      ),
+    );
+
+    try {
+      await AudioPlayer.global.setAudioContext(context); // 🆕 global
+      await _audioPlayer.setAudioContext(context); // instanța ta
+    } catch (e) {
+      debugPrint("Eroare la configurarea AudioContext: $e");
+    }
   }
 
   void startTimer({int? seconds}) {
@@ -94,17 +124,33 @@ class RestTimerService extends ChangeNotifier {
     }
   }
 
-  void _onTimerFinished() {
+  void _onTimerFinished() async {
     _timer?.cancel();
     _state = TimerState.finished;
     _remainingSeconds = 0;
     notifyListeners();
 
-    // Feedback haptic (vibrează telefonul când se termină pauza)
-    HapticFeedback.vibrate();
-    Future.delayed(const Duration(milliseconds: 300), () => HapticFeedback.vibrate());
+    final settings = DatabaseService.appSettings;
 
-    // TODO: Aici putem adăuga un sunet discret sau o notificare locală
+    // Feedback haptic (vibrează telefonul când se termină pauza)
+
+    final bool enableHaptics = settings?.enableHapticFeedback ?? true;
+    if (enableHaptics) {
+      HapticFeedback.vibrate();
+      Future.delayed(const Duration(milliseconds: 300), () => HapticFeedback.vibrate());
+    }
+
+    // TODO: Testat: Aici putem adăuga un sunet discret sau o notificare locală
+    final bool enableSound = settings?.enableSoundEffects ?? true;
+    if (enableSound) {
+      try {
+        await _audioPlayer.stop();
+        await _audioPlayer.setVolume(0.3);
+        await _audioPlayer.play(AssetSource('sounds/timer_finished.wav'));
+      } catch (e) {
+        debugPrint("Eroare la redarea sunetului de timer: $e");
+      }
+    }
   }
 
   @override

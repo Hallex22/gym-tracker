@@ -1,3 +1,4 @@
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:gym_tracker/services/database_service.dart';
 import 'package:gym_tracker/services/stats_service.dart';
@@ -6,24 +7,32 @@ import '../../../enums/enums.dart';
 import '../../../models/models.dart';
 import '../../widgets/top_toast.dart';
 
-class ExerciseDetailPage extends StatelessWidget {
+enum ChartMetric { est1RM, maxWeight, totalVolume }
+
+class ExerciseDetailPage extends StatefulWidget {
   final Exercise exercise;
 
   const ExerciseDetailPage({super.key, required this.exercise});
 
+  @override
+  State<ExerciseDetailPage> createState() => _ExerciseDetailPageState();
+}
+
+class _ExerciseDetailPageState extends State<ExerciseDetailPage> {
+  ChartMetric _selectedMetric = ChartMetric.est1RM;
+
   // --- METODĂ DESCHIDERE URL (MUSCLE WIKI) ---
   Future<void> _launchSourceUrl(BuildContext context) async {
-    final Uri url = Uri.parse(exercise.sourceUrl);
+    final Uri url = Uri.parse(widget.exercise.sourceUrl);
     try {
       await launchUrl(url, mode: LaunchMode.inAppBrowserView);
     } catch (e) {
-      if (!context.mounted) return;
+      if (!mounted) return;
       TopToast.show(context, 'Could not open the link', type: ToastType.warning);
     }
   }
 
   // --- CULORI DINAMICE DIFICULTATE ---
-  // TODO - de mutat in logica dificultatii culorile
   Color _getDifficultyColor(Difficulty diff, ThemeData theme) {
     switch (diff.name.toLowerCase()) {
       case 'beginner':
@@ -42,15 +51,14 @@ class ExerciseDetailPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final unit = DatabaseService.globalUnit;
-    final prs = StatsService.getPersonalRecords(exercise.id);
-
-    final history = StatsService.getExerciseHistory(exercise.id);
+    final prs = StatsService.getPersonalRecords(widget.exercise.id);
+    final history = StatsService.getExerciseHistory(widget.exercise.id);
 
     return DefaultTabController(
-      length: 3, // Cele 3 Tab-uri: About, Instructions, PRs
+      length: 3,
       child: Scaffold(
         appBar: AppBar(
-          title: Text(exercise.name),
+          title: Text(widget.exercise.name),
           centerTitle: true,
           actions: [
             IconButton(
@@ -84,20 +92,17 @@ class ExerciseDetailPage extends StatelessWidget {
 
   // ==================== TAB 1: ABOUT ====================
   Widget _buildAboutTab(BuildContext context, ThemeData theme) {
-    final primaryMuscle = exercise.primaryMuscles.isNotEmpty ? exercise.primaryMuscles.first : null;
-    final secondaryMuscles = exercise.secondaryMuscles;
-    final tertiaryMuscles = exercise.tertiaryMuscles;
+    final primaryMuscle = widget.exercise.primaryMuscles.isNotEmpty ? widget.exercise.primaryMuscles.first : null;
+    final secondaryMuscles = widget.exercise.secondaryMuscles;
+    final tertiaryMuscles = widget.exercise.tertiaryMuscles;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Imaginea sau Placeholder-ul sus
           _buildCoverImage(theme),
           const SizedBox(height: 20),
-
-          // Informații structurate elegant pe rânduri
           Text(
             'Exercise Profile',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
@@ -126,35 +131,35 @@ class ExerciseDetailPage extends StatelessWidget {
                     theme,
                     icon: Icons.fitness_center_rounded,
                     label: 'Equipment',
-                    value: exercise.equipment.name.replaceAll('_', ' ').toUpperCase(),
+                    value: widget.exercise.equipment.name.replaceAll('_', ' ').toUpperCase(),
                   ),
-                  if (exercise.mechanic != null)
+                  if (widget.exercise.mechanic != null)
                     _buildProfileRow(
                       theme,
                       icon: Icons.settings_accessibility_rounded,
                       label: 'Mechanics',
-                      value: exercise.mechanic!.name.toUpperCase(),
+                      value: widget.exercise.mechanic!.name.toUpperCase(),
                     ),
-                  if (exercise.force != null)
+                  if (widget.exercise.force != null)
                     _buildProfileRow(
                       theme,
                       icon: Icons.bolt_rounded,
                       label: 'Force Type',
-                      value: exercise.force!.name.toUpperCase(),
+                      value: widget.exercise.force!.name.toUpperCase(),
                     ),
                   _buildProfileRow(
                     theme,
                     icon: Icons.speed_rounded,
                     label: 'Difficulty',
-                    value: exercise.difficulty.name.toUpperCase(),
-                    valueColor: _getDifficultyColor(exercise.difficulty, theme),
+                    value: widget.exercise.difficulty.name.toUpperCase(),
+                    valueColor: _getDifficultyColor(widget.exercise.difficulty, theme),
                   ),
-                  if (exercise.grips.isNotEmpty)
+                  if (widget.exercise.grips.isNotEmpty)
                     _buildProfileRow(
                       theme,
                       icon: Icons.front_hand_outlined,
                       label: 'Required Grip',
-                      value: exercise.grips.map((g) => g.name.toUpperCase()).join(', '),
+                      value: widget.exercise.grips.map((g) => g.name.toUpperCase()).join(', '),
                       isLast: true,
                     ),
                 ],
@@ -162,8 +167,6 @@ class ExerciseDetailPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 24),
-
-          // Grupele musculare recrutate (Secundari & Terțiari)
           if (secondaryMuscles.isNotEmpty || tertiaryMuscles.isNotEmpty) ...[
             Text(
               'Anatomy & Muscle Recruitment',
@@ -218,7 +221,7 @@ class ExerciseDetailPage extends StatelessWidget {
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
           ),
           const SizedBox(height: 16),
-          if (exercise.instructions.isEmpty)
+          if (widget.exercise.instructions.isEmpty)
             Center(
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 40.0),
@@ -232,7 +235,7 @@ class ExerciseDetailPage extends StatelessWidget {
             ListView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: exercise.instructions.length,
+              itemCount: widget.exercise.instructions.length,
               itemBuilder: (context, index) {
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 16.0),
@@ -250,7 +253,7 @@ class ExerciseDetailPage extends StatelessWidget {
                       const SizedBox(width: 16),
                       Expanded(
                         child: Text(
-                          exercise.instructions[index],
+                          widget.exercise.instructions[index],
                           style: TextStyle(fontSize: 14, height: 1.5, color: theme.colorScheme.onSurfaceVariant),
                         ),
                       ),
@@ -262,7 +265,7 @@ class ExerciseDetailPage extends StatelessWidget {
           const SizedBox(height: 12),
           Center(
             child: TextButton.icon(
-              onPressed: () => _launchSourceUrl(theme as BuildContext), // Context bypass sau redirecționare sigură
+              onPressed: () => _launchSourceUrl(context),
               icon: const Icon(Icons.language, size: 16),
               label: const Text('Read full breakdown on MuscleWiki',
                   style: TextStyle(fontSize: 13, decoration: TextDecoration.underline)),
@@ -273,7 +276,7 @@ class ExerciseDetailPage extends StatelessWidget {
     );
   }
 
-  // ==================== TAB 3: PERSONAL RECORDS ====================
+  // ==================== TAB 3: PERSONAL RECORDS & HISTORY ====================
   Widget _buildHistoryAndPRsTab(
     ThemeData theme,
     ExercisePRs prs,
@@ -287,7 +290,6 @@ class ExerciseDetailPage extends StatelessWidget {
       return '$formattedNum ${unit.label}';
     }
 
-    // Funcție helper pentru formatarea datei într-un mod simplu (ex: "12 Oct 2023")
     String formatDate(DateTime date) {
       final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       return '${date.day} ${months[date.month - 1]} ${date.year}';
@@ -309,7 +311,7 @@ class ExerciseDetailPage extends StatelessWidget {
           ),
           const SizedBox(height: 16),
 
-          // Grila PR-uri
+          // 1. Grila PR-uri (Carduri Fixe)
           GridView.count(
             crossAxisCount: 2,
             shrinkWrap: true,
@@ -345,14 +347,39 @@ class ExerciseDetailPage extends StatelessWidget {
             ],
           ),
 
-          const SizedBox(height: 32),
+          const SizedBox(height: 28),
+
+          // 2. Sectiunea Graficului de Progres
           Text(
-            'Recent Performance',
+            'Progress Analytics 📈',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
+          ),
+          const SizedBox(height: 10),
+
+          // Chip-uri de comutare metrica
+          Row(
+            children: [
+              _buildMetricChip(theme, 'Est. 1RM', ChartMetric.est1RM),
+              const SizedBox(width: 8),
+              _buildMetricChip(theme, 'Max Weight', ChartMetric.maxWeight),
+              const SizedBox(width: 8),
+              _buildMetricChip(theme, 'Total Volume', ChartMetric.totalVolume),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Container Grafic Dinamic
+          _buildAnalyticsChart(theme, history, unit),
+
+          const SizedBox(height: 32),
+
+          // 3. Istoricul Sesiunilor
+          Text(
+            'Recent Performance History',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: theme.colorScheme.onSurface),
           ),
           const SizedBox(height: 12),
 
-          // Verificăm dacă avem istoric sau afișăm placeholder-ul
           if (history.isEmpty)
             Container(
               padding: const EdgeInsets.all(16),
@@ -375,7 +402,6 @@ class ExerciseDetailPage extends StatelessWidget {
               ),
             )
           else
-            // Construim lista de sesiuni trecute
             ListView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
@@ -398,7 +424,6 @@ class ExerciseDetailPage extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Capul cardului: Numele antrenamentului și Data
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
@@ -423,8 +448,6 @@ class ExerciseDetailPage extends StatelessWidget {
                         const SizedBox(height: 8),
                         Divider(height: 1, color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
                         const SizedBox(height: 8),
-
-                        // Lista cu seturile efectuate în acea sesiune
                         ListView.builder(
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
@@ -435,7 +458,6 @@ class ExerciseDetailPage extends StatelessWidget {
                               padding: const EdgeInsets.symmetric(vertical: 4.0),
                               child: Row(
                                 children: [
-                                  // Indexul setului (ex: 1, 2, 3)
                                   Container(
                                     width: 20,
                                     alignment: Alignment.centerLeft,
@@ -449,14 +471,12 @@ class ExerciseDetailPage extends StatelessWidget {
                                     ),
                                   ),
                                   const SizedBox(width: 8),
-                                  // Greutatea x Repetările
                                   Expanded(
                                     child: Text(
                                       '${formatValue(set.weight)}  ×  ${set.reps} reps',
                                       style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
                                     ),
                                   ),
-                                  // Indicator vizual opțional dacă setul a fost de încălzire/drop etc. (dacă folosești enums pentru tipul de set)
                                 ],
                               ),
                             );
@@ -473,14 +493,213 @@ class ExerciseDetailPage extends StatelessWidget {
     );
   }
 
-  // ==================== WIDGETS HELPERS ====================
+  // ==================== WIDGETS GRAFIC & HELPERE ====================
+
+  Widget _buildMetricChip(ThemeData theme, String label, ChartMetric metric) {
+    final isSelected = _selectedMetric == metric;
+    return ChoiceChip(
+      label: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          color: isSelected ? theme.colorScheme.onPrimary : theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
+      selected: isSelected,
+      selectedColor: theme.colorScheme.primary,
+      backgroundColor: theme.colorScheme.surfaceContainerLow,
+      showCheckmark: false,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(
+          color: isSelected ? Colors.transparent : theme.colorScheme.outlineVariant.withOpacity(0.3),
+        ),
+      ),
+      onSelected: (bool selected) {
+        if (selected) {
+          setState(() {
+            _selectedMetric = metric;
+          });
+        }
+      },
+    );
+  }
+
+  Widget _buildAnalyticsChart(
+    ThemeData theme,
+    List<MapEntry<WorkoutLog, LoggedExercise>> history,
+    UnitSystem unit,
+  ) {
+    if (history.isEmpty) {
+      return Container(
+        height: 180,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: theme.colorScheme.outlineVariant.withOpacity(0.3)),
+        ),
+        child: Text(
+          'Log sessions to unlock chart insights.',
+          style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 13),
+        ),
+      );
+    }
+
+    // Istoricul vine de obicei descrescător, deci îl inversăm pentru grafic (stânga -> dreapta)
+    final chronHistory = history.reversed.toList();
+    final List<FlSpot> spots = [];
+
+    for (int i = 0; i < chronHistory.length; i++) {
+      final entry = chronHistory[i];
+      final LoggedExercise loggedEx = entry.value;
+
+      double valInKg = 0;
+      switch (_selectedMetric) {
+        case ChartMetric.est1RM:
+          for (var set in loggedEx.sets) {
+            final e1rm = set.reps > 0 ? set.weight * (1 + (set.reps / 30.0)) : set.weight;
+            if (e1rm > valInKg) valInKg = e1rm;
+          }
+          break;
+
+        case ChartMetric.maxWeight:
+          for (var set in loggedEx.sets) {
+            if (set.weight > valInKg) valInKg = set.weight;
+          }
+          break;
+
+        case ChartMetric.totalVolume:
+          for (var set in loggedEx.sets) {
+            valInKg += (set.weight * set.reps);
+          }
+          break;
+      }
+
+      final double displayVal = unit == UnitSystem.lbs ? valInKg * 2.2046226218 : valInKg;
+      spots.add(FlSpot(i.toDouble(), double.parse(displayVal.toStringAsFixed(1))));
+    }
+
+    // --- CALCUL DINAMIC INTERVAL AXA X ---
+    // Vrem să afișăm maxim ~5 etichete de dată pe axa X pentru a preveni înghesuirea.
+    final double computedInterval = (chronHistory.length / 4).ceilToDouble().clamp(1.0, double.infinity);
+
+    return Container(
+      height: 220,
+      padding: const EdgeInsets.only(right: 20, left: 12, top: 20, bottom: 10),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: theme.colorScheme.outlineVariant.withOpacity(0.3)),
+      ),
+      child: LineChart(
+        LineChartData(
+          gridData: FlGridData(
+            show: true,
+            drawVerticalLine: false,
+            getDrawingHorizontalLine: (value) => FlLine(
+              color: theme.colorScheme.outlineVariant.withOpacity(0.2),
+              strokeWidth: 1,
+            ),
+          ),
+          titlesData: FlTitlesData(
+            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            leftTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: 40,
+                getTitlesWidget: (value, meta) {
+                  return Text(
+                    value.toInt().toString(),
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  );
+                },
+              ),
+            ),
+            bottomTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                // Aplicăm intervalul dinamic calculat:
+                interval: computedInterval,
+                getTitlesWidget: (value, meta) {
+                  final idx = value.toInt();
+                  // Afișăm doar etichetele care se potrivesc cu pasul calculat și prima/ultima din listă
+                  if (idx >= 0 && idx < chronHistory.length) {
+                    final date = chronHistory[idx].key.startTime;
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 6.0),
+                      child: Text(
+                        '${date.day}/${date.month}',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    );
+                  }
+                  return const SizedBox();
+                },
+              ),
+            ),
+          ),
+          borderData: FlBorderData(show: false),
+          lineBarsData: [
+            LineChartBarData(
+              spots: spots,
+              isCurved: true,
+              color: theme.colorScheme.primary,
+              barWidth: 3,
+              isStrokeCapRound: true,
+              dotData: FlDotData(
+                show: true,
+                getDotPainter: (spot, percent, barData, index) => FlDotCirclePainter(
+                  radius: 4,
+                  color: theme.colorScheme.primary,
+                  strokeWidth: 2,
+                  strokeColor: theme.colorScheme.surface,
+                ),
+              ),
+              belowBarData: BarAreaData(
+                show: true,
+                color: theme.colorScheme.primary.withOpacity(0.12),
+              ),
+            ),
+          ],
+          lineTouchData: LineTouchData(
+            touchTooltipData: LineTouchTooltipData(
+              getTooltipItems: (touchedSpots) {
+                return touchedSpots.map((spot) {
+                  return LineTooltipItem(
+                    '${spot.y} ${unit.label}',
+                    TextStyle(
+                      color: theme.colorScheme.onPrimary,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  );
+                }).toList();
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ==================== WIDGETS PROFILE / COVER / BADGES ====================
 
   Widget _buildCoverImage(ThemeData theme) {
-    if (exercise.coverImage != null) {
+    if (widget.exercise.coverImage != null) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(12),
         child: Image.asset(
-          'assets/${exercise.coverImage}',
+          'assets/${widget.exercise.coverImage}',
           height: 200,
           width: double.infinity,
           fit: BoxFit.cover,
@@ -597,16 +816,18 @@ class ExerciseDetailPage extends StatelessWidget {
             : theme.colorScheme.surfaceContainerLowest.withOpacity(0.4),
         borderRadius: BorderRadius.circular(6),
         border: Border.all(
-            color: isSecondary
-                ? theme.colorScheme.onSurfaceVariant.withOpacity(0.15)
-                : theme.colorScheme.onSurfaceVariant.withOpacity(0.05)),
+          color: isSecondary
+              ? theme.colorScheme.onSurfaceVariant.withOpacity(0.15)
+              : theme.colorScheme.onSurfaceVariant.withOpacity(0.05),
+        ),
       ),
       child: Text(
         label,
         style: TextStyle(
-            fontSize: 10,
-            fontWeight: isSecondary ? FontWeight.w600 : FontWeight.normal,
-            color: isSecondary ? theme.colorScheme.onSurface : theme.colorScheme.onSurfaceVariant),
+          fontSize: 10,
+          fontWeight: isSecondary ? FontWeight.w600 : FontWeight.normal,
+          color: isSecondary ? theme.colorScheme.onSurface : theme.colorScheme.onSurfaceVariant,
+        ),
       ),
     );
   }

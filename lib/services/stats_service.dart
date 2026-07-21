@@ -8,7 +8,9 @@ class StatsService {
     final rawLogs = DatabaseService.logsBox.values;
     if (rawLogs.isEmpty) return 0;
 
-    final List<DateTime> workoutDates = rawLogs.map((logMap) => WorkoutLog.fromMap(logMap as Map).startTime).toList();
+    final filteredLogs =
+        rawLogs.map((logMap) => WorkoutLog.fromMap(logMap as Map)).where((log) => log.status == WorkoutStatus.finished);
+    final List<DateTime> workoutDates = filteredLogs.map((log) => log.startTime).toList();
 
     if (workoutDates.isEmpty) return 0;
 
@@ -55,14 +57,13 @@ class StatsService {
     if (rawLogs.isEmpty) return false;
 
     final now = DateTime.now();
-    // Găsim Lunea din săptămâna curentă la ora 00:00:00
     final daysToSubtract = now.weekday - 1;
     final mondayThisWeek = DateTime(now.year, now.month, now.day).subtract(Duration(days: daysToSubtract));
 
-    // Verificăm dacă există vreun antrenament început după Luni, ora 00:00
     return rawLogs.any((logMap) {
       final log = WorkoutLog.fromMap(logMap as Map);
-      return log.startTime.isAfter(mondayThisWeek) || log.startTime.isAtSameMomentAs(mondayThisWeek);
+      return log.status == WorkoutStatus.finished &&
+          (log.startTime.isAfter(mondayThisWeek) || log.startTime.isAtSameMomentAs(mondayThisWeek));
     });
   }
 
@@ -74,6 +75,23 @@ class StatsService {
     required List<dynamic> activeExercises,
   }) {
     try {
+      // 1. Căutăm exercițiul activ într-un mod sigur (fără să crape dacă nu există în activeExercises)
+      final currentEx = activeExercises.cast<dynamic>().firstWhere(
+            (ex) => ex.exerciseId == exerciseId,
+            orElse: () => null,
+          );
+
+      // Dacă exercițiul nu e în lista curentă activă, nu avem cum calcula relativeCategoryIndex
+      if (currentEx == null) return (0.0, 0);
+
+      // 2. Calculăm al câtelea set de ACEST TIP este cel curent
+      final List<LoggedSet> currentSets = List<LoggedSet>.from(currentEx.sets);
+
+      // Protecție: ne asigurăm că setIndex nu depășește lungimea listei curente
+      final safeIndex = setIndex < currentSets.length ? setIndex : currentSets.length;
+      final relativeCategoryIndex = currentSets.sublist(0, safeIndex).where((s) => s.type == currentType).length;
+
+      // 3. Preluăm istoricul antrenamentelor sortat descrescător (cel mai recent primul)
       final logs = DatabaseService.logsBox.values.toList()
         ..sort((a, b) {
           final logA = WorkoutLog.fromMap(a as Map);
@@ -81,44 +99,38 @@ class StatsService {
           return logB.startTime.compareTo(logA.startTime);
         });
 
+      // 4. Parcurgem istoricul înapoi în timp
       for (var rawLog in logs) {
         final log = WorkoutLog.fromMap(rawLog as Map);
 
-        // 🔧 FIX: Tratăm ambele cazuri de "started" (dacă starea e enum sau String)
+        // Ignorăm antrenamentele care sunt încă în desfășurare
         final isStarted = log.status == WorkoutStatus.started || log.status.toString().contains('started');
         if (isStarted) continue;
 
-        final exercise = log.exercises.firstWhere(
-          (ex) => ex.exerciseId == exerciseId,
-          orElse: () => null as dynamic,
-        );
+        // Căutăm exercițiul în acest log din istoric (folosim unde e sigur, fără casting 'as dynamic')
+        final exerciseIndex = log.exercises.indexWhere((ex) => ex.exerciseId == exerciseId);
 
-        if (exercise != null) {
-          // 🚀 CURĂȚARE: Facem cast direct la List<LoggedSet>
+        if (exerciseIndex != -1) {
+          final exercise = log.exercises[exerciseIndex];
           final List<LoggedSet> pastSets = List<LoggedSet>.from(exercise.sets);
 
-          // 🎯 MODIFICARE: Filtrăm strict după tipul de set curent (Normal, Warmup, Drop, Failure etc.)
+          // Filtrăm doar seturile de același tip (Normal, Warmup, Drop etc.)
           final matchingPastSets = pastSets.where((s) => s.type == currentType).toList();
 
-          final currentEx = activeExercises.firstWhere((ex) => ex.exerciseId == exerciseId);
-
-          // 🚀 CURĂȚARE: Facem cast direct și aici pentru siguranță
-          final List<LoggedSet> currentSets = List<LoggedSet>.from(currentEx.sets);
-
-          // 🎯 MODIFICARE: Calculăm al câtelea set de ACEST TIP exact este cel curent din listă
-          final relativeCategoryIndex = currentSets.sublist(0, setIndex).where((s) => s.type == currentType).length;
-
-          // Dacă în trecut aveam cel puțin atâtea seturi de acest tip, returnăm valorile corespunzătoare
+          // Dacă am găsit suficiente seturi de acest tip în sesiunea respectivă din trecut
           if (matchingPastSets.length > relativeCategoryIndex) {
             final prevSet = matchingPastSets[relativeCategoryIndex];
             return (prevSet.weight, prevSet.reps);
           }
+          // 💡 NOTĂ: Dacă în acest antrenament nu au fost destule seturi de acest tip,
+          // bucla va CUMPĂNI și va merge MAI DEPARTE la penultimul, antepenultimul etc.!
         }
       }
     } catch (e) {
       debugPrint("Eroare la calcularea Previous: $e");
     }
-    return (0.0, 0); // Valoare implicită dacă nu găsește nimic
+
+    return (0.0, 0); // Valoare implicită dacă nu găsește nicio potrivire în tot istoricul
   }
 
   static ExercisePRs getPersonalRecords(int exerciseId) {

@@ -203,7 +203,7 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
                                   setState(() => _searchQuery = ''),
                             )
                           : null,
-                      border: const OutlineInputBorder(),
+                      border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
                       contentPadding: const EdgeInsets.symmetric(vertical: 8),
                     ),
                     onChanged: (value) => setState(() => _searchQuery = value),
