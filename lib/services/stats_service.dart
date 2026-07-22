@@ -229,29 +229,33 @@ class StatsService {
   static List<MapEntry<String, int>> getWorkoutsPerWeek(int weeksCount) {
     if (!DatabaseService.logsBox.isOpen) return [];
 
-    // Inițializăm o listă pentru ultimele N săptămâni cu 0 antrenamente
     final DateTime now = DateTime.now();
 
-    // Generăm intervalele pentru fiecare săptămână (de la cea mai veche la cea mai recentă)
+    // 1. Găsim data de azi la ora 00:00:00
+    final DateTime todayMidnight = DateTime(now.year, now.month, now.day);
+
+    // 2. Calculăm data de LUNI din săptămâna CURENTĂ la 00:00:00
+    // În Dart: Monday = 1, Tuesday = 2 ... Sunday = 7
+    final DateTime currentWeekMonday = todayMidnight.subtract(
+      Duration(days: now.weekday - 1),
+    );
+
     final List<MapEntry<DateTimeRange, int>> weeklyBuckets = [];
 
     for (int i = weeksCount - 1; i >= 0; i--) {
-      // Calculăm începutul și sfârșitul săptămânii relative la săptămâna curentă
-      final int daysToSubtract = i * 7;
-      final DateTime endOfWeek = now.subtract(Duration(days: daysToSubtract));
+      final DateTime startOfWeek = currentWeekMonday.subtract(Duration(days: i * 7));
 
-      // Găsim începutul acestei săptămâni (acum 7 zile față de finalul ei)
-      final DateTime startOfWeek = endOfWeek.subtract(const Duration(days: 7));
+      final DateTime endOfWeek =
+          startOfWeek.add(const Duration(days: 6)).copyWith(hour: 23, minute: 59, second: 59, millisecond: 999);
 
       weeklyBuckets.add(
         MapEntry(
           DateTimeRange(start: startOfWeek, end: endOfWeek),
-          0, // Inițial pornim de la 0 antrenamente
+          0,
         ),
       );
     }
 
-    // Parcurgem logurile din baza de date și le distribuim în săptămânile corespunzătoare
     for (var value in DatabaseService.logsBox.values) {
       final log = WorkoutLog.fromMap(value as Map);
 
@@ -259,22 +263,44 @@ class StatsService {
 
       for (int i = 0; i < weeklyBuckets.length; i++) {
         final range = weeklyBuckets[i].key;
-        if (log.startTime.isAfter(range.start) && log.startTime.isBefore(range.end)) {
+
+        final bool isAfterStart = log.startTime.isAfter(range.start) || log.startTime.isAtSameMomentAs(range.start);
+        final bool isBeforeEnd = log.startTime.isBefore(range.end) || log.startTime.isAtSameMomentAs(range.end);
+
+        if (isAfterStart && isBeforeEnd) {
           weeklyBuckets[i] = MapEntry(range, weeklyBuckets[i].value + 1);
           break;
         }
       }
     }
 
-    // Formatăm rezultatul pentru grafic (ex: "S1", "S2" sau intervalul de date "15-21 Iul")
+    final List<String> shortMonths = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
+    ];
+
     return weeklyBuckets.map((bucket) {
       final start = bucket.key.start;
       final end = bucket.key.end;
 
-      // Format simplificat: Zi/Lună (ex: "10/07") pentru începutul săptămânii
-      final String label = '${start.day}/${start.month}';
+      final String startLabel = '${start.day} ${shortMonths[start.month - 1]}';
 
-      return MapEntry(label, bucket.value);
+      final String endLabel = '${end.day} ${shortMonths[end.month - 1]}';
+
+      // Salvăm intervalul complet în cheie (folosim '|' ca separator rapid): "15 Jul | 21 Jul"
+      final String fullRangeLabel = '$startLabel|$endLabel';
+
+      return MapEntry(fullRangeLabel, bucket.value);
     }).toList();
   }
 }

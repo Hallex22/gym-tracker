@@ -2,12 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:gym_tracker/screens/profile/settings_page.dart';
 import 'package:gym_tracker/screens/workout/workout_detail_page.dart';
 import 'package:gym_tracker/widgets/charts/weekly_activity_chart.dart';
+import 'package:gym_tracker/widgets/charts/muscle_split_chart.dart'; // 💡 Importăm noul chart
 import '../../enums/enums.dart';
 import '../../models/app_settings.dart';
 import '../../models/models.dart';
 import '../../services/database_service.dart';
 import '../../utils/date_utils.dart';
+import '../../widgets/charts/total_volume_chart.dart';
 import 'calendar_page.dart';
+
+// Enum pentru tipul de grafic selectat în profil
+enum ProfileChartType { consistency, muscleSplit, totalVolume }
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -20,6 +25,9 @@ class _ProfilePageState extends State<ProfilePage> {
   List<MapEntry<dynamic, WorkoutLog>> _finishedLogsWithKeys = [];
   late UnitSystem _globalUnit;
   final double myBodyWeight = DatabaseService.getLatestBodyweightInKg();
+
+  // 💡 Starea pentru graficul activ selectat prin chip-uri
+  ProfileChartType _selectedChart = ProfileChartType.consistency;
 
   @override
   void initState() {
@@ -56,8 +64,47 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
+  Widget _buildPillChip({
+    required BuildContext context,
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    final theme = Theme.of(context);
+    final primaryColor = theme.colorScheme.primary;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 0),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            // Primary plin dacă e selectat, Primary cu opacitate de 12% dacă e inactiv
+            color: isSelected ? primaryColor : primaryColor.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(100),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              // Text Alb dacă e selectat, Culoarea Primary dacă e inactiv
+              color: isSelected ? Colors.white : primaryColor,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Workout History'),
@@ -95,37 +142,109 @@ class _ProfilePageState extends State<ProfilePage> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.history, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  Icon(Icons.history, size: 64, color: theme.colorScheme.onSurfaceVariant),
                   const SizedBox(height: 16),
                   Text(
                     'No completed workouts yet.\nTime to hit the gym! 🏋️‍♂️',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 16),
+                    style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 16),
                   ),
                 ],
               ),
             )
           : ListView.builder(
-              // 💡 Săptămâna + Titlul secundar + Istoricul de sesiuni = Lungimea totală a listei
-              itemCount: _finishedLogsWithKeys.length + 2,
+              // Index 0: Chip-urile de selecție
+              // Index 1: Graficul activ selectat
+              // Index 2: Textul "Past Sessions"
+              // Index 3+: Listă antrenamente
+              itemCount: _finishedLogsWithKeys.length + 3,
               padding: const EdgeInsets.only(left: 16, right: 16, bottom: 24),
               itemBuilder: (context, index) {
-                // 1. Primul element din listă (Index 0) -> Graficul
+                // 1. Selectorul de chip-uri derulabil pe orizontală
                 if (index == 0) {
-                  return const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12.0),
-                    child: WeeklyActivityChart(weeksCount: 8),
+                  final primaryColor = theme.colorScheme.primary;
+
+                  return Container(
+                    height: 48,
+                    margin: const EdgeInsets.only(top: 8.0, bottom: 4.0),
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      // Păstrăm padding-ul aliniat cu marginile ecranului
+                      padding: EdgeInsets.zero,
+                      children: [
+                        // --- CHIP 1: Weekly Consistency ---
+                        _buildPillChip(
+                          context: context,
+                          label: 'Weekly Consistency',
+                          isSelected: _selectedChart == ProfileChartType.consistency,
+                          onTap: () {
+                            setState(() => _selectedChart = ProfileChartType.consistency);
+                          },
+                        ),
+
+                        const SizedBox(width: 8),
+
+                        // --- CHIP 2: Muscle Split ---
+                        _buildPillChip(
+                          context: context,
+                          label: 'Muscle Split',
+                          isSelected: _selectedChart == ProfileChartType.muscleSplit,
+                          onTap: () {
+                            setState(() => _selectedChart = ProfileChartType.muscleSplit);
+                          },
+                        ),
+
+                        // 💡 Dacă adaugi al 3-lea grafic în viitor, adaugi doar un alt SizedBox + _buildPillChip aici!
+                        const SizedBox(width: 8),
+                        _buildPillChip(
+                          context: context,
+                          label: 'Total Volume',
+                          isSelected: _selectedChart == ProfileChartType.totalVolume,
+                          onTap: () {
+                            setState(() => _selectedChart = ProfileChartType.totalVolume);
+                          },
+                        ),
+                      ],
+                    ),
                   );
                 }
 
-                // 2. Al doilea element din listă (Index 1) -> Textul "Past Sessions"
+                // 2. Randarea dinamică a graficului selectat
                 if (index == 1) {
                   return Padding(
-                    padding: const EdgeInsets.only(top: 8.0, bottom: 12.0),
+                    padding: const EdgeInsets.symmetric(vertical: 8.0),
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 250),
+                      child: () {
+                        switch (_selectedChart) {
+                          case ProfileChartType.consistency:
+                            return const WeeklyActivityChart(
+                              key: ValueKey('consistency_chart'),
+                              weeksCount: 8,
+                            );
+                          case ProfileChartType.muscleSplit:
+                            return const MuscleSplitChart(
+                              key: ValueKey('muscle_split_chart'),
+                              daysRange: 30,
+                            );
+                          case ProfileChartType.totalVolume:
+                            return const TotalVolumeChart(
+                              key: ValueKey('total_volume_chart'),
+                            );
+                        }
+                      }(),
+                    ),
+                  );
+                }
+
+                // 3. Textul secundar "Past Sessions"
+                if (index == 2) {
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 12.0, bottom: 8.0),
                     child: Text(
                       'Past Sessions',
                       style: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        color: theme.colorScheme.onSurfaceVariant,
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
                       ),
@@ -133,9 +252,8 @@ class _ProfilePageState extends State<ProfilePage> {
                   );
                 }
 
-                // 3. Toate elementele următoare -> Cardurile cu antrenamente
-                // Ajustăm indexul cu -2 din cauza celor două elemente de header de mai sus
-                final entry = _finishedLogsWithKeys[index - 2];
+                // 4. Cardurile cu sesiunile anterioare (ajustate cu index - 3)
+                final entry = _finishedLogsWithKeys[index - 3];
                 final logKey = entry.key;
                 final log = entry.value;
                 final String formattedDate = formatDateNative(log.startTime);
@@ -143,7 +261,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 return Card(
                   margin: const EdgeInsets.symmetric(vertical: 8.0),
                   child: InkWell(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(16),
                     onTap: () async {
                       await Navigator.push(
                         context,
@@ -167,12 +285,12 @@ class _ProfilePageState extends State<ProfilePage> {
                               Expanded(
                                 child: Text(
                                   log.routineTitle,
-                                  style: Theme.of(context).textTheme.titleLarge,
+                                  style: theme.textTheme.titleLarge,
                                 ),
                               ),
                               Icon(
                                 Icons.chevron_right,
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                color: theme.colorScheme.onSurfaceVariant,
                                 size: 20,
                               ),
                             ],
@@ -181,7 +299,7 @@ class _ProfilePageState extends State<ProfilePage> {
                           Text(
                             formattedDate,
                             style: TextStyle(
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              color: theme.colorScheme.onSurfaceVariant,
                               fontSize: 12,
                             ),
                           ),
@@ -194,7 +312,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w500,
-                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                    color: theme.colorScheme.onSurfaceVariant,
                                     letterSpacing: 0.5,
                                   ),
                                 ),
@@ -205,7 +323,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w500,
-                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                    color: theme.colorScheme.onSurfaceVariant,
                                     letterSpacing: 0.5,
                                   ),
                                 ),
@@ -221,7 +339,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                     Icon(
                                       Icons.access_time,
                                       size: 16,
-                                      color: Theme.of(context).colorScheme.onSurface,
+                                      color: theme.colorScheme.onSurface,
                                     ),
                                     const SizedBox(width: 6),
                                     Text(
@@ -229,7 +347,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                       style: TextStyle(
                                         fontSize: 15,
                                         fontWeight: FontWeight.bold,
-                                        color: Theme.of(context).colorScheme.onSurface,
+                                        color: theme.colorScheme.onSurface,
                                       ),
                                     ),
                                   ],
@@ -241,7 +359,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                     Icon(
                                       Icons.fitness_center,
                                       size: 16,
-                                      color: Theme.of(context).colorScheme.onSurface,
+                                      color: theme.colorScheme.onSurface,
                                     ),
                                     const SizedBox(width: 6),
                                     Text(
@@ -249,7 +367,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                       style: TextStyle(
                                         fontSize: 15,
                                         fontWeight: FontWeight.bold,
-                                        color: Theme.of(context).colorScheme.onSurface,
+                                        color: theme.colorScheme.onSurface,
                                       ),
                                     ),
                                   ],

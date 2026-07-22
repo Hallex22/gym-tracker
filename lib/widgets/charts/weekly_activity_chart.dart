@@ -26,7 +26,7 @@ class WeeklyActivityChart extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLow,
+        color: context.bg,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: context.borderMuted),
       ),
@@ -62,15 +62,34 @@ class WeeklyActivityChart extends StatelessWidget {
                 maxY: yLimit,
                 barTouchData: BarTouchData(
                   touchTooltipData: BarTouchTooltipData(
-                    getTooltipColor: (group) => theme.colorScheme.primaryContainer,
+                    tooltipRoundedRadius: 12,
+                    getTooltipColor: (group) => context.bgLight,
                     getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                      // Extragere interval complet din cheie (ex: "15 Jul - 21 Jul")
+                      final parts = data[groupIndex].key.split('|');
+                      final startLabel = parts.first;
+                      final endLabel = parts.length > 1 ? parts.last : '';
+
+                      final String dateRange = '$startLabel - $endLabel';
+                      final int count = rod.toY.toInt();
+
                       return BarTooltipItem(
-                        '${rod.toY.toInt()} workouts',
+                        '$dateRange\n',
                         TextStyle(
-                          color: theme.colorScheme.onPrimaryContainer,
+                          color: context.text,
                           fontWeight: FontWeight.bold,
                           fontSize: 12,
                         ),
+                        children: [
+                          TextSpan(
+                            text: '$count workout${count == 1 ? '' : 's'}',
+                            style: TextStyle(
+                              color: context.textMuted,
+                              fontWeight: FontWeight.normal,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
                       );
                     },
                   ),
@@ -79,27 +98,34 @@ class WeeklyActivityChart extends StatelessWidget {
                   show: true,
                   bottomTitles: AxisTitles(
                     sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 30,
-                      getTitlesWidget: (double value, TitleMeta meta) {
-                        final int index = value.toInt();
-                        if (index < 0 || index >= data.length) {
-                          return const SizedBox.shrink();
-                        }
-                        return SideTitleWidget(
-                          axisSide: meta.axisSide,
-                          space: 8,
-                          child: Text(
-                            data[index].key,
-                            style: TextStyle(
-                              color: theme.colorScheme.onSurfaceVariant,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w500,
+                        showTitles: true,
+                        reservedSize: 30,
+                        interval: 1,
+                        getTitlesWidget: (double value, TitleMeta meta) {
+                          final int index = value.toInt();
+                          if (index < 0 || index >= data.length) return const SizedBox.shrink();
+
+                          if (data.length > 4 && index % 2 != 0) return const SizedBox.shrink();
+
+                          // Spargem cheia ca să luăm doar data de start "15 Jul"
+                          final startLabel = data[index].key.split('|').first;
+
+                          return SideTitleWidget(
+                            axisSide: meta.axisSide,
+                            space: 8,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                startLabel,
+                                style: TextStyle(
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                             ),
-                          ),
-                        );
-                      },
-                    ),
+                          );
+                        }),
                   ),
                   leftTitles: AxisTitles(
                     sideTitles: SideTitles(
@@ -129,11 +155,8 @@ class WeeklyActivityChart extends StatelessWidget {
                   show: true,
                   drawVerticalLine: false,
                   horizontalInterval: 1,
-                  getDrawingHorizontalLine: (value) => FlLine(
-                    color: context.textMuted.withOpacity(0.1),
-                    strokeWidth: 1,
-                    dashArray: null
-                  ),
+                  getDrawingHorizontalLine: (value) =>
+                      FlLine(color: context.textMuted.withOpacity(0.1), strokeWidth: 1, dashArray: null),
                 ),
                 borderData: FlBorderData(show: false),
                 barGroups: List.generate(data.length, (index) {
