@@ -32,15 +32,12 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
   }
 
   void _loadAvailableExercises() {
-    final exercises =
-        DatabaseService.exercisesBox.values.map((e) => Exercise.fromMap(e as Map)).toList();
+    final exercises = DatabaseService.exercisesBox.values.map((e) => Exercise.fromMap(e as Map)).toList();
 
     setState(() {
-      if (widget.existingExercisesIds != null &&
-          widget.existingExercisesIds!.isNotEmpty) {
+      if (widget.existingExercisesIds != null && widget.existingExercisesIds!.isNotEmpty) {
         final excludedIds = widget.existingExercisesIds!.toSet();
-        _allAvailableExercises =
-            exercises.where((ex) => !excludedIds.contains(ex.id)).toList();
+        _allAvailableExercises = exercises.where((ex) => !excludedIds.contains(ex.id)).toList();
       } else {
         _allAvailableExercises = exercises;
       }
@@ -49,8 +46,7 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
 
   void _toggleExerciseSelection(Exercise exercise) {
     setState(() {
-      final index =
-          _newSelectedExercises.indexWhere((e) => e.id == exercise.id);
+      final index = _newSelectedExercises.indexWhere((e) => e.id == exercise.id);
       if (index >= 0) {
         _newSelectedExercises.removeAt(index);
       } else {
@@ -65,12 +61,10 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
 
   List<Exercise> get _filteredExercises {
     return _allAvailableExercises.where((exercise) {
-      final matchesSearch =
-          exercise.name.toLowerCase().contains(_searchQuery.toLowerCase());
-      final matchesMuscle = _selectedMuscleFilter == null ||
-          exercise.primaryMuscles.any((m) => m.group == _selectedMuscleFilter);
-      final matchesEquipment = _selectedEquipmentFilter == null ||
-          exercise.equipment == _selectedEquipmentFilter;
+      final matchesSearch = exercise.name.toLowerCase().contains(_searchQuery.toLowerCase());
+      final matchesMuscle =
+          _selectedMuscleFilter == null || exercise.primaryMuscles.any((m) => m.group == _selectedMuscleFilter);
+      final matchesEquipment = _selectedEquipmentFilter == null || exercise.equipment == _selectedEquipmentFilter;
       return matchesSearch && matchesMuscle && matchesEquipment;
     }).toList();
   }
@@ -96,8 +90,7 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
       builder: (context) {
         return SafeArea(
           child: Container(
-            constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(context).size.height * 0.6),
+            constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.6),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -106,10 +99,7 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurfaceVariant
-                        .withOpacity(0.3),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.3),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -117,25 +107,19 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
                   padding: const EdgeInsets.all(16.0),
                   child: Text(
                     title,
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.bold),
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ),
-                Divider(
-                    height: 1,
-                    color:
-                        Theme.of(context).colorScheme.primary.withOpacity(0.2)),
+                Divider(height: 1, color: Theme.of(context).colorScheme.primary.withOpacity(0.2)),
                 Expanded(
                   child: ListView.builder(
                     itemCount: values.length + 1,
                     itemBuilder: (context, index) {
                       if (index == 0) {
                         return ListTile(
-                          title: const Text('ALL',
-                              style: TextStyle(fontWeight: FontWeight.bold)),
+                          title: const Text('ALL', style: TextStyle(fontWeight: FontWeight.bold)),
                           trailing: currentValue == null
-                              ? Icon(Icons.check,
-                                  color: Theme.of(context).colorScheme.primary)
+                              ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary)
                               : null,
                           onTap: () {
                             onSelected(null);
@@ -147,10 +131,7 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
                       final isSelected = currentValue == item;
                       return ListTile(
                         title: Text(getName(item).toUpperCase()),
-                        trailing: isSelected
-                            ? Icon(Icons.check,
-                                color: Theme.of(context).colorScheme.primary)
-                            : null,
+                        trailing: isSelected ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary) : null,
                         onTap: () {
                           onSelected(item);
                           Navigator.pop(context);
@@ -169,9 +150,8 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
 
   @override
   Widget build(BuildContext context) {
-    final bool hasActiveFilters = _selectedMuscleFilter != null ||
-        _selectedEquipmentFilter != null ||
-        _searchQuery.isNotEmpty;
+    final bool hasActiveFilters =
+        _selectedMuscleFilter != null || _selectedEquipmentFilter != null || _searchQuery.isNotEmpty;
 
     final theme = Theme.of(context);
 
@@ -199,8 +179,7 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
                       suffixIcon: _searchQuery.isNotEmpty
                           ? IconButton(
                               icon: const Icon(Icons.clear),
-                              onPressed: () =>
-                                  setState(() => _searchQuery = ''),
+                              onPressed: () => setState(() => _searchQuery = ''),
                             )
                           : null,
                       border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
@@ -215,32 +194,26 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
                         child: OutlinedButton.icon(
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(horizontal: 8),
-                            foregroundColor: _selectedMuscleFilter != null
-                                ? theme.colorScheme.primary
-                                : theme.colorScheme.onSurface,
+                            foregroundColor:
+                                _selectedMuscleFilter != null ? theme.colorScheme.primary : theme.colorScheme.onSurface,
                             side: BorderSide(
                                 color: _selectedMuscleFilter != null
                                     ? theme.colorScheme.primary
-                                    : theme.colorScheme.onSurfaceVariant
-                                        .withOpacity(0.3)),
+                                    : theme.colorScheme.onSurfaceVariant.withOpacity(0.3)),
                           ),
                           onPressed: () => _showFilterSelector<MuscleGroup>(
                             title: 'Select Muscle Group',
                             values: MuscleGroup.values,
                             currentValue: _selectedMuscleFilter,
                             getName: (m) => m.name,
-                            onSelected: (val) =>
-                                setState(() => _selectedMuscleFilter = val),
+                            onSelected: (val) => setState(() => _selectedMuscleFilter = val),
                           ),
                           icon: const Icon(Icons.fitness_center, size: 16),
                           label: Text(
-                            _selectedMuscleFilter != null
-                                ? _selectedMuscleFilter!.name.toUpperCase()
-                                : 'ALL MUSCLES',
+                            _selectedMuscleFilter != null ? _selectedMuscleFilter!.name.toUpperCase() : 'ALL MUSCLES',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                                fontSize: 11, fontWeight: FontWeight.bold),
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
                           ),
                         ),
                       ),
@@ -255,16 +228,14 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
                             side: BorderSide(
                                 color: _selectedEquipmentFilter != null
                                     ? theme.colorScheme.primary
-                                    : theme.colorScheme.onSurfaceVariant
-                                        .withOpacity(0.3)),
+                                    : theme.colorScheme.onSurfaceVariant.withOpacity(0.3)),
                           ),
                           onPressed: () => _showFilterSelector<Equipment>(
                             title: 'Select Equipment',
                             values: Equipment.values,
                             currentValue: _selectedEquipmentFilter,
                             getName: (e) => e.name,
-                            onSelected: (val) =>
-                                setState(() => _selectedEquipmentFilter = val),
+                            onSelected: (val) => setState(() => _selectedEquipmentFilter = val),
                           ),
                           icon: const Icon(Icons.layers_outlined, size: 16),
                           label: Text(
@@ -273,16 +244,14 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
                                 : 'ALL EQUIPMENT',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                                fontSize: 11, fontWeight: FontWeight.bold),
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
                           ),
                         ),
                       ),
                       if (hasActiveFilters) ...[
                         const SizedBox(width: 4),
                         IconButton(
-                          icon: Icon(Icons.refresh,
-                              color: theme.colorScheme.onSurfaceVariant),
+                          icon: Icon(Icons.refresh, color: theme.colorScheme.onSurfaceVariant),
                           tooltip: 'Clear Filters',
                           onPressed: _clearAllFilters,
                         ),
@@ -292,11 +261,7 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
                 ],
               ),
             ),
-            Divider(
-                height: 1,
-                indent: 16,
-                endIndent: 16,
-                color: theme.colorScheme.primary.withOpacity(0.2)),
+            Divider(height: 1, indent: 16, endIndent: 16, color: theme.colorScheme.primary.withOpacity(0.2)),
 
             // --- LISTA DE EXERCIȚII REZULTATE ---
             Expanded(
@@ -304,32 +269,28 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
                   ? Center(
                       child: Text(
                         'No exercises found matching filters.',
-                        style: TextStyle(
-                            color: theme.colorScheme.onSurfaceVariant),
+                        style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
                       ),
                     )
                   : ListView.builder(
                       itemCount: _filteredExercises.length,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       itemBuilder: (context, index) {
                         final exercise = _filteredExercises[index];
                         final isSelected = _isExerciseSelected(exercise);
 
-                        final primaryMuscle = exercise.primaryMuscles.isNotEmpty
-                            ? exercise.primaryMuscles.first.label
-                            : 'Core';
+                        final primaryMuscle =
+                            exercise.primaryMuscles.isNotEmpty ? exercise.primaryMuscles.first.label : 'Core';
                         final subtitleText =
                             '${primaryMuscle.toUpperCase()} • ${exercise.equipment.name.toUpperCase()}';
 
                         // Logică imagine (la fel ca în ActiveWorkoutPage)
                         final coverImage = exercise.coverImage;
-                        final isImageEmpty =
-                            coverImage == null || coverImage.trim().isEmpty;
+                        final isImageEmpty = coverImage == null || coverImage.trim().isEmpty;
 
                         return Card(
                           margin: const EdgeInsets.symmetric(vertical: 4),
-                          elevation: 0,
+                          elevation: 2,
                           child: Padding(
                             padding: const EdgeInsets.all(8.0),
                             child: Row(
@@ -342,9 +303,7 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
                                       Navigator.push(
                                         context,
                                         MaterialPageRoute(
-                                          builder: (context) =>
-                                              ExerciseDetailPage(
-                                                  exercise: exercise),
+                                          builder: (context) => ExerciseDetailPage(exercise: exercise),
                                         ),
                                       );
                                     },
@@ -355,18 +314,11 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
                                           // Avatarul cu poza exercițiului
                                           CircleAvatar(
                                             radius: 24,
-                                            backgroundColor: theme.colorScheme
-                                                .surfaceContainerHighest,
-                                            backgroundImage: !isImageEmpty
-                                                ? AssetImage(
-                                                    'assets/$coverImage')
-                                                : null,
+                                            backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                                            backgroundImage: !isImageEmpty ? AssetImage('assets/$coverImage') : null,
                                             child: isImageEmpty
-                                                ? Icon(
-                                                    Icons.image_not_supported,
-                                                    size: 16,
-                                                    color: theme.colorScheme
-                                                        .onSurfaceVariant)
+                                                ? Icon(Icons.image_not_supported,
+                                                    size: 16, color: theme.colorScheme.onSurfaceVariant)
                                                 : null,
                                           ),
                                           const SizedBox(width: 12),
@@ -374,15 +326,13 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
                                           // Titlul și Subtitlul exercițiului
                                           Expanded(
                                             child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
+                                              crossAxisAlignment: CrossAxisAlignment.start,
                                               children: [
                                                 Text(
                                                   exercise.name,
                                                   style: TextStyle(
                                                     fontWeight: FontWeight.bold,
-                                                    color: theme
-                                                        .colorScheme.onSurface,
+                                                    color: theme.colorScheme.onSurface,
                                                     fontSize: 14,
                                                   ),
                                                 ),
@@ -390,9 +340,7 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
                                                 Text(
                                                   subtitleText,
                                                   style: TextStyle(
-                                                      fontSize: 10,
-                                                      color: theme.colorScheme
-                                                          .onSurfaceVariant),
+                                                      fontSize: 10, color: theme.colorScheme.onSurfaceVariant),
                                                 ),
                                               ],
                                             ),
@@ -405,37 +353,30 @@ class _ExerciseSelectionPageState extends State<ExerciseSelectionPage> {
 
                                 // 💡 CERCUL CUSTOM PENTRU SELECȚIE (Fie cerc cu plus, fie bifat)
                                 Padding(
-                                  padding: const EdgeInsets.only(
-                                      left: 8.0, right: 4.0),
+                                  padding: const EdgeInsets.only(left: 8.0, right: 4.0),
                                   child: InkWell(
-                                    onTap: () =>
-                                        _toggleExerciseSelection(exercise),
+                                    onTap: () => _toggleExerciseSelection(exercise),
                                     borderRadius: BorderRadius.circular(100),
                                     child: AnimatedContainer(
-                                      duration:
-                                          const Duration(milliseconds: 200),
+                                      duration: const Duration(milliseconds: 200),
                                       width: 32,
                                       height: 32,
                                       decoration: BoxDecoration(
                                         shape: BoxShape.circle,
                                         color: isSelected
                                             ? theme.colorScheme.primary
-                                            : theme.colorScheme
-                                                .surfaceContainerHighest,
+                                            : theme.colorScheme.surfaceContainerHighest,
                                         border: Border.all(
                                           color: isSelected
                                               ? theme.colorScheme.primary
-                                              : theme
-                                                  .colorScheme.primary.withOpacity(0.2),
+                                              : theme.colorScheme.primary.withOpacity(0.2),
                                           width: 1.5,
                                         ),
                                       ),
                                       child: Icon(
                                         isSelected ? Icons.check : Icons.add,
                                         size: 18,
-                                        color: isSelected
-                                            ? theme.colorScheme.onPrimary
-                                            : theme.colorScheme.primary,
+                                        color: isSelected ? theme.colorScheme.onPrimary : theme.colorScheme.primary,
                                       ),
                                     ),
                                   ),

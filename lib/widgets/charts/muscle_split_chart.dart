@@ -3,28 +3,49 @@ import 'package:flutter/material.dart';
 import 'package:gym_tracker/enums/enums.dart';
 import 'package:gym_tracker/models/models.dart';
 import 'package:gym_tracker/services/database_service.dart';
-
 import '../../theme/app_theme.dart';
 
-class MuscleSplitChart extends StatefulWidget {
-  final int? daysRange;
+enum MuscleSplitTimeframe {
+  days7(7, 'Last 7 Days'),
+  days30(30, 'Last 30 Days'),
+  days90(90, 'Last 90 Days'),
+  allTime(null, 'All Time');
 
-  const MuscleSplitChart({super.key, this.daysRange = 30});
+  final int? days;
+  final String label;
+  const MuscleSplitTimeframe(this.days, this.label);
+}
+
+class MuscleSplitChart extends StatefulWidget {
+  final int? initialDaysRange;
+
+  const MuscleSplitChart({super.key, this.initialDaysRange = 30});
 
   @override
   State<MuscleSplitChart> createState() => _MuscleSplitChartState();
 }
 
 class _MuscleSplitChartState extends State<MuscleSplitChart> {
+  late MuscleSplitTimeframe _selectedTimeframe;
   int _touchedIndex = -1;
   int _totalPhysicalSets = 0;
 
-  Map<MuscleGroup, double> _calculateMuscleSplit() {
-    final Map<MuscleGroup, double> muscleScores = {};
+  @override
+  void initState() {
+    super.initState();
+    _selectedTimeframe = MuscleSplitTimeframe.values.firstWhere(
+      (e) => e.days == widget.initialDaysRange,
+      orElse: () => MuscleSplitTimeframe.days30,
+    );
+  }
+
+  Map<HighLevelMuscleGroup, double> _calculateMuscleSplit() {
+    final Map<HighLevelMuscleGroup, double> muscleScores = {};
     _totalPhysicalSets = 0;
 
     final DateTime now = DateTime.now();
-    final DateTime? cutoffDate = widget.daysRange != null ? now.subtract(Duration(days: widget.daysRange!)) : null;
+    final int? daysRange = _selectedTimeframe.days;
+    final DateTime? cutoffDate = daysRange != null ? now.subtract(Duration(days: daysRange)) : null;
 
     try {
       final logsRaw = DatabaseService.logsBox.values;
@@ -33,7 +54,6 @@ class _MuscleSplitChartState extends State<MuscleSplitChart> {
         final WorkoutLog log =
             rawLog is WorkoutLog ? rawLog : WorkoutLog.fromMap(Map<String, dynamic>.from(rawLog as Map));
 
-        // Verificăm doar antrenamentele finalizate și filtrate după dată
         if (log.status != WorkoutStatus.finished) continue;
         if (cutoffDate != null && log.startTime.isBefore(cutoffDate)) continue;
 
@@ -50,22 +70,26 @@ class _MuscleSplitChartState extends State<MuscleSplitChart> {
 
           _totalPhysicalSets += completedSets;
 
+          // Helper intern pentru adăugarea scorului direct în grupa HighLevel
+          void addScore(MuscleGroup targetGroup, double weight) {
+            final highLevel = HighLevelMuscleGroup.fromMuscleGroup(targetGroup);
+            if (highLevel == HighLevelMuscleGroup.other) return; // Ignorăm necunoscutele dacă e cazul
+            muscleScores[highLevel] = (muscleScores[highLevel] ?? 0.0) + (completedSets * weight);
+          }
+
           // 1. Primary Muscles (100% / 1.0)
           for (final target in exercise.primaryMuscles) {
-            final group = target.group;
-            muscleScores[group] = (muscleScores[group] ?? 0.0) + (completedSets * 1.0);
+            addScore(target.group, 1.0);
           }
 
           // 2. Secondary Muscles (50% / 0.5)
           for (final target in exercise.secondaryMuscles) {
-            final group = target.group;
-            muscleScores[group] = (muscleScores[group] ?? 0.0) + (completedSets * 0.5);
+            addScore(target.group, 0.5);
           }
 
           // 3. Tertiary Muscles (25% / 0.25)
           for (final target in exercise.tertiaryMuscles) {
-            final group = target.group;
-            muscleScores[group] = (muscleScores[group] ?? 0.0) + (completedSets * 0.25);
+            addScore(target.group, 0.25);
           }
         }
       }
@@ -83,35 +107,83 @@ class _MuscleSplitChartState extends State<MuscleSplitChart> {
 
     if (data.isEmpty) {
       return Container(
-        height: 180,
+        height: 200,
         alignment: Alignment.center,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerLow,
+          color: context.bg,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: theme.colorScheme.outlineVariant.withOpacity(0.3)),
+          border: Border.all(color: context.borderMuted),
         ),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.pie_chart_outline_rounded, size: 40, color: theme.colorScheme.onSurfaceVariant.withOpacity(0.5)),
+            // Header cu titlu + Dropdown (chiar și pe stare goală)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Muscle Recruitment 🎯',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                ),
+                Container(
+                  height: 28,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  decoration: BoxDecoration(
+                    color: context.bgLight,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<MuscleSplitTimeframe>(
+                      value: _selectedTimeframe,
+                      icon: Icon(Icons.arrow_drop_down, size: 18, color: theme.colorScheme.primary),
+                      dropdownColor: context.bgLight,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.primary,
+                      ),
+                      onChanged: (MuscleSplitTimeframe? newValue) {
+                        if (newValue != null) {
+                          setState(() {
+                            _selectedTimeframe = newValue;
+                            _touchedIndex = -1;
+                          });
+                        }
+                      },
+                      items: MuscleSplitTimeframe.values.map((MuscleSplitTimeframe tf) {
+                        return DropdownMenuItem<MuscleSplitTimeframe>(
+                          value: tf,
+                          child: Text(tf.label),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const Spacer(),
+            Icon(Icons.pie_chart_outline_rounded, size: 40, color: context.textMuted.withOpacity(0.5)),
             const SizedBox(height: 8),
             Text(
               'No muscle recruitment data yet.',
-              style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 13),
+              style: TextStyle(color: context.textMuted, fontSize: 13),
             ),
             const SizedBox(height: 4),
             Text(
               'Complete workouts to see your split distribution.',
-              style: TextStyle(color: theme.colorScheme.onSurfaceVariant.withOpacity(0.7), fontSize: 11),
+              style: TextStyle(color: context.textMuted.withOpacity(0.7), fontSize: 11),
             ),
+            const Spacer(),
           ],
         ),
       );
     }
 
     final double totalWeightedScore = data.values.fold<double>(0.0, (sum, score) => sum + score);
-
     final sortedEntries = data.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
 
     return Container(
@@ -120,12 +192,66 @@ class _MuscleSplitChartState extends State<MuscleSplitChart> {
         color: context.bg,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: context.borderMuted),
+        boxShadow: context.cardShadow,
       ),
       child: Column(
         children: [
+          // Header cu titlu + Dropdown Selector
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Muscle Recruitment 🎯',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.onSurface,
+                ),
+              ),
+              // Dropdown
+              Container(
+                height: 28,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                decoration: BoxDecoration(
+                  color: context.bgLight,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<MuscleSplitTimeframe>(
+                    value: _selectedTimeframe,
+                    icon: Icon(Icons.arrow_drop_down, size: 18, color: theme.colorScheme.primary),
+                    dropdownColor: context.bgLight,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.primary,
+                    ),
+                    onChanged: (MuscleSplitTimeframe? newValue) {
+                      if (newValue != null) {
+                        setState(() {
+                          _selectedTimeframe = newValue;
+                          _touchedIndex = -1;
+                        });
+                      }
+                    },
+                    items: MuscleSplitTimeframe.values.map((MuscleSplitTimeframe tf) {
+                      return DropdownMenuItem<MuscleSplitTimeframe>(
+                        value: tf,
+                        child: Text(tf.label),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+
+          // Donut Chart + Legendă
           Row(
             children: [
-              // Donut Chart cu Pondere
+              // Donut Chart
               SizedBox(
                 height: 150,
                 width: 150,
@@ -177,7 +303,7 @@ class _MuscleSplitChartState extends State<MuscleSplitChart> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: List.generate(
-                    sortedEntries.length > 5 ? 5 : sortedEntries.length,
+                    sortedEntries.length,
                     (i) {
                       final entry = sortedEntries[i];
                       final percentage = ((entry.value / totalWeightedScore) * 100).toStringAsFixed(1);
@@ -224,14 +350,17 @@ class _MuscleSplitChartState extends State<MuscleSplitChart> {
               ),
             ],
           ),
+
           const SizedBox(height: 12),
-          Divider(height: 1, color: context.primary.withOpacity(0.2)),
+          Divider(height: 1, color: context.borderMuted),
           const SizedBox(height: 8),
+
+          // Subsol dinamic în funcție de opțiunea selectată
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                widget.daysRange != null ? 'Last ${widget.daysRange} days total' : 'All time total',
+                _selectedTimeframe.days != null ? 'Last ${_selectedTimeframe.days} days total' : 'All time total',
                 style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
               ),
               Text(

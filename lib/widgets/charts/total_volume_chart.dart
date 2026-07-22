@@ -30,6 +30,29 @@ class _TotalVolumeChartState extends State<TotalVolumeChart> {
     final DateTime now = DateTime.now();
 
     try {
+      // 1. Pre-populăm harta cu intervalele fixe (inițializate cu 0.0)
+      if (_selectedTimeframe == VolumeTimeframe.weekly) {
+        // Găsim ziua de Luni din săptămâna curentă
+        final currentMonday = DateTime(now.year, now.month, now.day).subtract(Duration(days: now.weekday - 1));
+        
+        // Generăm ultimele 8 săptămâni
+        for (int i = 7; i >= 0; i--) {
+          final startOfWeek = currentMonday.subtract(Duration(days: i * 7));
+          final monthName = _getShortMonthName(startOfWeek.month);
+          final key = '${startOfWeek.day} $monthName';
+          volumeMap[key] = 0.0;
+        }
+      } else {
+        // Generăm ultimele 6 luni (doar numele lunii pe axa X: 'Jul', 'Jun' etc.)
+        for (int i = 5; i >= 0; i--) {
+          final monthDate = DateTime(now.year, now.month - i, 1);
+          final monthName = _getShortMonthName(monthDate.month);
+          final key = monthName;
+          volumeMap[key] = 0.0;
+        }
+      }
+
+      // 2. Parcurgem antrenamentele și adăugăm volumul în slot-ul corespunzător
       final logsRaw = DatabaseService.logsBox.values;
 
       for (final rawLog in logsRaw) {
@@ -42,19 +65,17 @@ class _TotalVolumeChartState extends State<TotalVolumeChart> {
         String key;
 
         if (_selectedTimeframe == VolumeTimeframe.weekly) {
-          if (date.isBefore(now.subtract(const Duration(days: 56)))) continue;
-
-          final startOfWeek = date.subtract(Duration(days: date.weekday - 1));
+          final startOfWeek = DateTime(date.year, date.month, date.day).subtract(Duration(days: date.weekday - 1));
           final monthName = _getShortMonthName(startOfWeek.month);
           key = '${startOfWeek.day} $monthName';
         } else {
-          if (date.isBefore(DateTime(now.year, now.month - 5, 1))) continue;
-
-          final monthName = _getShortMonthName(date.month);
-          key = '$monthName ${date.year.toString().substring(2)}';
+          key = _getShortMonthName(date.month);
         }
 
-        volumeMap[key] = (volumeMap[key] ?? 0.0) + log.totalVolume;
+        // Adăugăm volumul DOAR dacă cheia există deja în intervalul generat
+        if (volumeMap.containsKey(key)) {
+          volumeMap[key] = volumeMap[key]! + log.totalVolume;
+        }
       }
     } catch (e) {
       debugPrint('Error calculating total volume trend: $e');
@@ -118,6 +139,7 @@ class _TotalVolumeChartState extends State<TotalVolumeChart> {
         color: context.bg,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: context.borderMuted),
+        boxShadow: context.cardShadow,
       ),
       child: Column(
         children: [
@@ -133,7 +155,7 @@ class _TotalVolumeChartState extends State<TotalVolumeChart> {
                   color: theme.colorScheme.onSurface,
                 ),
               ),
-              // Dropdown subtil
+              // Dropdown
               Container(
                 height: 28,
                 padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -188,8 +210,17 @@ class _TotalVolumeChartState extends State<TotalVolumeChart> {
                     getTooltipItem: (group, groupIndex, rod, rodIndex) {
                       final label = data[groupIndex].key;
                       final volume = rod.toY;
+
+                      // Construim eticheta completă pentru tooltip
+                      String fullLabel = label;
+                      if (_selectedTimeframe == VolumeTimeframe.monthly) {
+                        final DateTime now = DateTime.now();
+                        final targetDate = DateTime(now.year, now.month - (5 - groupIndex), 1);
+                        fullLabel = '$label ${targetDate.year}'; // ex: "Jul 2026"
+                      }
+
                       return BarTooltipItem(
-                        '$label\n',
+                        '$fullLabel\n',
                         TextStyle(
                           color: context.text,
                           fontWeight: FontWeight.bold,

@@ -145,7 +145,7 @@ class RestTimerService extends ChangeNotifier {
     if (enableSound) {
       try {
         await _audioPlayer.stop();
-        await _audioPlayer.setVolume(0.3);
+        await _audioPlayer.setVolume(0.5);
         await _audioPlayer.play(AssetSource('sounds/timer_finished.wav'));
       } catch (e) {
         debugPrint("Eroare la redarea sunetului de timer: $e");

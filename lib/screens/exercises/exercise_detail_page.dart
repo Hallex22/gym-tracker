@@ -2,6 +2,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:gym_tracker/services/database_service.dart';
 import 'package:gym_tracker/services/stats_service.dart';
+import 'package:gym_tracker/theme/app_theme.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../enums/enums.dart';
 import '../../../models/models.dart';
@@ -109,11 +110,11 @@ class _ExerciseDetailPageState extends State<ExerciseDetailPage> {
           ),
           const SizedBox(height: 10),
           Card(
-            elevation: 0,
-            color: theme.colorScheme.surfaceContainerLow,
+            elevation: 2,
+            color: context.bg,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: theme.colorScheme.outlineVariant.withOpacity(0.3)),
+              borderRadius: BorderRadius.circular(16),
+              side: BorderSide(color: context.borderMuted),
             ),
             child: Padding(
               padding: const EdgeInsets.all(16.0),
@@ -387,6 +388,7 @@ class _ExerciseDetailPageState extends State<ExerciseDetailPage> {
                 color: theme.colorScheme.surfaceContainerLow,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: theme.colorScheme.outlineVariant.withOpacity(0.3)),
+                boxShadow: context.cardShadow,
               ),
               child: const Row(
                 children: [
@@ -413,7 +415,7 @@ class _ExerciseDetailPageState extends State<ExerciseDetailPage> {
 
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
-                  elevation: 0,
+                  elevation: 1,
                   color: theme.colorScheme.surfaceContainerLow,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -507,6 +509,7 @@ class _ExerciseDetailPageState extends State<ExerciseDetailPage> {
         ),
       ),
       selected: isSelected,
+      elevation: 1,
       selectedColor: theme.colorScheme.primary,
       backgroundColor: theme.colorScheme.surfaceContainerLow,
       showCheckmark: false,
@@ -540,6 +543,7 @@ class _ExerciseDetailPageState extends State<ExerciseDetailPage> {
           color: theme.colorScheme.surfaceContainerLow,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: theme.colorScheme.outlineVariant.withOpacity(0.3)),
+          boxShadow: context.cardShadow,
         ),
         child: Text(
           'Log sessions to unlock chart insights.',
@@ -593,6 +597,7 @@ class _ExerciseDetailPageState extends State<ExerciseDetailPage> {
         color: theme.colorScheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: theme.colorScheme.outlineVariant.withOpacity(0.3)),
+        boxShadow: context.cardShadow,
       ),
       child: LineChart(
         LineChartData(
@@ -697,7 +702,7 @@ class _ExerciseDetailPageState extends State<ExerciseDetailPage> {
   Widget _buildCoverImage(ThemeData theme) {
     if (widget.exercise.coverImage != null) {
       return ClipRRect(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         child: Image.asset(
           'assets/${widget.exercise.coverImage}',
           height: 200,
@@ -711,7 +716,7 @@ class _ExerciseDetailPageState extends State<ExerciseDetailPage> {
       width: double.infinity,
       decoration: BoxDecoration(
         color: theme.colorScheme.primary.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: theme.colorScheme.primary.withOpacity(0.15)),
       ),
       child: Column(
@@ -760,7 +765,7 @@ class _ExerciseDetailPageState extends State<ExerciseDetailPage> {
             ],
           ),
         ),
-        if (!isLast) Divider(height: 1, color: theme.colorScheme.outlineVariant.withOpacity(0.3)),
+        if (!isLast) Divider(height: 1, color: context.primary.withOpacity(0.1)),
       ],
     );
   }
@@ -773,11 +778,11 @@ class _ExerciseDetailPageState extends State<ExerciseDetailPage> {
     required Color color,
   }) {
     return Card(
-      elevation: 0,
+      elevation: 1,
       color: theme.colorScheme.surfaceContainerLow,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: theme.colorScheme.outlineVariant.withOpacity(0.3)),
+        side: BorderSide(color: context.borderMuted),
       ),
       child: Padding(
         padding: const EdgeInsets.all(12.0),

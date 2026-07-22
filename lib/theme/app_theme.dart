@@ -1,46 +1,44 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/material.dart' as flutter_theme show Theme, ThemeData;
 
-/// 🎨 Tokenii tăi de design pentru Dark Mode (Valori statice)
+/// Tokenii de design pentru Dark Mode
 class AppDarkColors {
-  static const Color bgDark = Color(0xFF0F0E17); // Fundal pagină închis
-  static const Color bg = Color(0xFF161424); // Carduri, BottomSheet
-  static const Color bgLight = Color(0xFF1F1C33); // Inputuri, zone evidențiate fin
+  static const Color bgDark = Color(0xFF0F0E17);
+  static const Color bg = Color(0xFF161424);
+  static const Color bgLight = Color(0xFF1F1C33);
 
-  static const Color primary = Color(0xFF9D4EDD); // Violet electric
+  static const Color primary = Color(0xFF9D4EDD);
   static const Color primaryContainer = Color(0xFF5A189A);
   static const Color secondary = Color(0xFFE0AAFF);
 
-  static const Color border = Color(0xFF322E4D); // Border vizibil
-  static const Color borderMuted = Color(0xFF232036); // Border fin
+  static const Color border = Color(0xFF322E4D);
+  static const Color borderMuted = Color(0xFF232036);
 
-  static const Color text = Color(0xFFFFFFFE); // Text principal alb
-  static const Color textMuted = Color(0xFF94A1B2); // Text secundar gri-albăstrui
+  static const Color text = Color(0xFFFFFFFE);
+  static const Color textMuted = Color(0xFF94A1B2);
   static const Color textOnPrimary = Color(0xFFFFFFFF);
   static const Color error = Colors.redAccent;
 }
 
-/// ☀️ Tokenii tăi de design pentru Light Mode (Valori statice luminoase)
+/// Tokenii de design pentru Light Mode
 class AppLightColors {
-  static const Color bgDark = Color(0xFFF9F9FB); // Fundal pagină curat / un alb foarte fin spre gri-albăstrui
-  static const Color bg = Color(0xFFFFFFFF); // Cardurile și foile din spate vor fi complet albe
-  static const Color bgLight = Color(0xFFF0EDF6); // Inputuri, fundal ușor violet-gri foarte deschis
+  static const Color bgDark = Color(0xFFF9F9FB);
+  static const Color bg = Color(0xFFFFFFFF);
+  static const Color bgLight = Color(0xFFF0EDF6);
 
-  static const Color primary = Color(0xFF7B2CBF); // Un violet puțin mai saturat/închis pentru contrast pe fundal alb
-  static const Color primaryContainer =
-      Color(0xFFE0AAFF); // Container de fundal foarte deschis pentru butoane/badguri discrete
+  static const Color primary = Color(0xFF7B2CBF);
+  static const Color primaryContainer = Color(0xFFE0AAFF);
   static const Color secondary = Color(0xFF5A189A);
 
-  static const Color border = Color(0xFFD6CDE6); // Margini vizibile gri-violet
-  static const Color borderMuted = Color(0xFFECE7F2); // Margini extrem de discrete pentru carduri
+  static const Color border = Color(0xFFD6CDE6);
+  static const Color borderMuted = Color(0xFFECE7F2);
 
-  static const Color text = Color(0xFF161424); // Text principal negru/închis (folosim chiar culoarea ta bg de pe dark)
-  static const Color textMuted = Color(0xFF6F6A8A); // Text secundar / hint-uri într-un gri cald
+  static const Color text = Color(0xFF161424);
+  static const Color textMuted = Color(0xFF6F6A8A);
   static const Color textOnPrimary = Color(0xFFFFFFFF);
   static const Color error = Color(0xFFD93838);
 }
 
-/// 📱 Configurația Temelor aplicației bazată pe ambele palete de culori
 class AppTheme {
   static const String _fontFamily = 'Inter';
 
@@ -115,6 +113,7 @@ class AppTheme {
       ),
       dialogTheme: const DialogThemeData(
         backgroundColor: AppDarkColors.bg,
+        elevation: 0,
         titleTextStyle:
             TextStyle(fontFamily: _fontFamily, fontSize: 20, fontWeight: FontWeight.bold, color: AppDarkColors.text),
         contentTextStyle: TextStyle(fontFamily: _fontFamily, color: AppDarkColors.textMuted),
@@ -196,7 +195,8 @@ class AppTheme {
       ),
       cardTheme: CardThemeData(
         color: AppLightColors.bg,
-        elevation: 0,
+        elevation: 2,
+        shadowColor: AppLightColors.border.withOpacity(0.4),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
           side: const BorderSide(color: AppLightColors.borderMuted),
@@ -206,7 +206,8 @@ class AppTheme {
         style: ElevatedButton.styleFrom(
           backgroundColor: AppLightColors.primary,
           foregroundColor: AppLightColors.textOnPrimary,
-          elevation: 0,
+          elevation: 3,
+          shadowColor: AppLightColors.primary.withOpacity(0.35),
           textStyle: const TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: 15,
@@ -216,16 +217,19 @@ class AppTheme {
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
         ),
       ),
-      dialogTheme: const DialogThemeData(
+      dialogTheme: DialogThemeData(
         backgroundColor: AppLightColors.bg,
-        titleTextStyle:
-            TextStyle(fontFamily: _fontFamily, fontSize: 20, fontWeight: FontWeight.bold, color: AppLightColors.text),
-        contentTextStyle: TextStyle(fontFamily: _fontFamily, color: AppLightColors.textMuted),
+        elevation: 6,
+        shadowColor: Colors.black.withOpacity(0.12),
+        titleTextStyle: const TextStyle(
+            fontFamily: _fontFamily, fontSize: 20, fontWeight: FontWeight.bold, color: AppLightColors.text),
+        contentTextStyle: const TextStyle(fontFamily: _fontFamily, color: AppLightColors.textMuted),
       ),
-      bottomSheetTheme: const BottomSheetThemeData(
+      bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: AppLightColors.bg,
-        elevation: 0,
-        shape: RoundedRectangleBorder(
+        elevation: 8,
+        shadowColor: Colors.black.withOpacity(0.12),
+        shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
       ),
@@ -255,7 +259,7 @@ extension BuildContextThemeExtensions on BuildContext {
   flutter_theme.ThemeData get theme => flutter_theme.Theme.of(this);
   ColorScheme get colorScheme => flutter_theme.Theme.of(this).colorScheme;
 
-  // --- TOKENII TĂI PREFERAȚI ---
+  // --- TOKENI DE BAZĂ ---
   Color get bgDark => theme.scaffoldBackgroundColor;
   Color get bg => theme.cardColor;
   Color get bgLight => colorScheme.surfaceContainerHighest;
@@ -268,6 +272,19 @@ extension BuildContextThemeExtensions on BuildContext {
 
   Color get text => colorScheme.onSurface;
   Color get textMuted => colorScheme.onSurfaceVariant;
-  
-  Color get error => colorScheme.error; // 👈 Adăugat ca să poți folosi și context.error!
+  Color get error => colorScheme.error;
+
+  /// Helper util: adaugă umbră automată pentru `Container(decoration: ...)` doar pe Light Mode
+  List<BoxShadow> get cardShadow {
+    final isLight = theme.brightness == Brightness.light;
+    if (!isLight) return const [];
+
+    return [
+      BoxShadow(
+        color: AppLightColors.border.withOpacity(0.35),
+        blurRadius: 10,
+        offset: const Offset(0, 4),
+      ),
+    ];
+  }
 }

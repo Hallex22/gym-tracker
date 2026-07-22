@@ -296,7 +296,7 @@ class _ExerciseExplorePageState extends State<ExerciseExplorePage> {
 
                         return Card(
                           margin: const EdgeInsets.symmetric(vertical: 4),
-                          elevation: 0,
+                          elevation: 1,
                           child: InkWell(
                             borderRadius: BorderRadius.circular(12),
                             onTap: () {

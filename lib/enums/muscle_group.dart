@@ -80,3 +80,58 @@ enum MuscleGroup {
     }
   }
 }
+
+//  ------------------------------
+// Enum Secundar, pentru grupare
+enum HighLevelMuscleGroup {
+  chest('Chest', Color(0xFFEF4444)),
+  back('Back', Color(0xFF3B82F6)),
+  shoulders('Shoulders', Color(0xFFF59E0B)),
+  arms('Arms', Color(0xFF8B5CF6)),
+  legs('Legs', Color(0xFF10B981)),
+  core('Core', Color(0xFFF97316)),
+  other('Other', Color(0xFF9CA3AF));
+
+  final String displayName;
+  final Color color;
+
+  const HighLevelMuscleGroup(this.displayName, this.color);
+
+  factory HighLevelMuscleGroup.fromMuscleGroup(MuscleGroup muscle) {
+    switch (muscle) {
+      case MuscleGroup.chest:
+        return HighLevelMuscleGroup.chest;
+
+      case MuscleGroup.lats:
+      case MuscleGroup.traps:
+      case MuscleGroup.trapsMidBack:
+      case MuscleGroup.lowerBack:
+        return HighLevelMuscleGroup.back;
+
+      case MuscleGroup.shoulders:
+      case MuscleGroup.neck:
+        return HighLevelMuscleGroup.shoulders;
+
+      case MuscleGroup.biceps:
+      case MuscleGroup.triceps:
+      case MuscleGroup.forearms:
+        return HighLevelMuscleGroup.arms;
+
+      case MuscleGroup.quads:
+      case MuscleGroup.hamstrings:
+      case MuscleGroup.calves:
+      case MuscleGroup.glutes:
+      case MuscleGroup.groin:
+      case MuscleGroup.feet:
+        return HighLevelMuscleGroup.legs;
+
+      case MuscleGroup.abdominals:
+      case MuscleGroup.obliques:
+        return HighLevelMuscleGroup.core;
+
+      case MuscleGroup.unknown:
+      default:
+        return HighLevelMuscleGroup.other;
+    }
+  }
+}

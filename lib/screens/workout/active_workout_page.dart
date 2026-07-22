@@ -27,7 +27,6 @@ class ActiveWorkoutPage extends StatefulWidget {
 
 class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
   final List<LoggedExercise> _activeExercises = [];
-  bool _isGlobalReordering = false;
   dynamic _currentLogKey;
   late DateTime _sessionStart;
   Timer? _liveTimer;
@@ -842,9 +841,9 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
               TextField(
                 controller: controller,
                 autofocus: true,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: false),
                 inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                  FilteringTextInputFormatter.allow(RegExp(r'[\d\,\.]')),
                 ],
                 style: TextStyle(color: context.text, fontWeight: FontWeight.bold),
                 decoration: InputDecoration(
@@ -1110,33 +1109,16 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                           final displayName = fullExercise?.name ?? 'Exercițiu necunoscut';
                           final coverImage = fullExercise?.coverImage;
 
-                          // Înlocuim widget-ul uriaș din mână cu versiunea mini compilată special pentru drag
                           return AnimatedBuilder(
                             animation: animation,
-                            builder: (context, _) {
-                              // Păstrăm o ușoară animație de elevație/scalare nativă pentru feedback vizual
-                              return _buildMiniExerciseCard(displayName, coverImage, theme);
+                            builder: (BuildContext context, Widget? child) {
+                              return Material(
+                                color: Colors.transparent,
+                                elevation: 6, // Îi dă o ușoară umbră să se vadă că plutește
+                                child: _buildMiniExerciseCard(displayName, coverImage, theme),
+                              );
                             },
                           );
-                        },
-                        onReorderStart: (index) {
-                          setState(() {
-                            _isGlobalReordering = true;
-                          });
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            if (_workoutScrollController.hasClients) {
-                              _workoutScrollController.animateTo(
-                                0.0, // Poziția de sus de tot
-                                duration: const Duration(milliseconds: 150), // Animație foarte rapidă
-                                curve: Curves.easeOutCubic,
-                              );
-                            }
-                          });
-                        },
-                        onReorderEnd: (index) {
-                          setState(() {
-                            _isGlobalReordering = false;
-                          });
                         },
                         onReorder: (oldIndex, newIndex) {
                           setState(() {
@@ -1167,12 +1149,6 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
 
                           // Starea curentă a checkmark-ului (isCompleted) pentru întreg cardul
                           final isExerciseFinished = _exerciseCompletedStatus[exercise.exerciseId] ?? false;
-
-                          if (_isGlobalReordering) {
-                            return KeyedSubtree(
-                                key: ValueKey('active_ex_compact_${exercise.exerciseId}_$exIndex'),
-                                child: _buildMiniExerciseCard(displayName, coverImage, theme));
-                          }
 
                           return Card(
                             key: ValueKey('active_ex_${exercise.exerciseId}_$exIndex'),
@@ -1705,23 +1681,27 @@ class _ActiveWorkoutPageState extends State<ActiveWorkoutPage> {
                                                               fontWeight: FontWeight.normal,
                                                               color:
                                                                   theme.colorScheme.onSurfaceVariant.withOpacity(0.8))),
+                                                      // ÎNLOCUIEȘTE BLOCUL onChanged DE LA WEIGHT CU ACESTA:
                                                       onChanged: (value) {
-                                                        final typedDisplay = double.tryParse(value) ?? 0.0;
+                                                        final normalizedValue = value.replaceAll(',', '.');
+                                                        final typedDisplay = double.tryParse(normalizedValue) ?? 0.0;
                                                         final rawInputWeightInKg = unit.toStorage(typedDisplay);
 
                                                         final effectiveWeight = LoggedSet.calculateEffectiveWeight(
-                                                            typedWeight: rawInputWeightInKg,
-                                                            equipment: fullExercise?.equipment ?? Equipment.barbell,
-                                                            currentBodyweight: myBodyWeight);
+                                                          typedWeight: rawInputWeightInKg,
+                                                          equipment: fullExercise?.equipment ?? Equipment.barbell,
+                                                          currentBodyweight: myBodyWeight,
+                                                        );
 
-                                                        setState(() {
-                                                          exercise.sets[setIndex] = LoggedSet(
-                                                            weight: effectiveWeight,
-                                                            reps: set.reps,
-                                                            type: set.type,
-                                                            isCompleted: set.isCompleted,
-                                                          );
-                                                        });
+                                                        // Salvăm valoarea direct în obiectul de date FĂRĂ să apelăm setState()
+                                                        // la fiecare literă/virgulă tastată (previne flickering-ul și pierderea cursorului).
+                                                        exercise.sets[setIndex] = LoggedSet(
+                                                          weight: effectiveWeight,
+                                                          reps: set.reps,
+                                                          type: set.type,
+                                                          isCompleted: set.isCompleted,
+                                                        );
+
                                                         _updateLiveProgress();
                                                       },
                                                     ),

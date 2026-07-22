@@ -34,7 +34,6 @@ class _WorkoutFormPageState extends State<WorkoutFormPage> {
   late DateTime _startTime;
   late DateTime _endTime;
   late List<LoggedExercise> _exercises;
-  bool _isGlobalReordering = false;
   double myBodyWeight = DatabaseService.getLatestBodyweightInKg();
 
   void _reloadBodyweight() {
@@ -798,25 +797,6 @@ class _WorkoutFormPageState extends State<WorkoutFormPage> {
                             },
                           );
                         },
-                        onReorderStart: (index) {
-                          setState(() {
-                            _isGlobalReordering = true;
-                          });
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            if (_workoutScrollController.hasClients) {
-                              _workoutScrollController.animateTo(
-                                0.0, // Poziția de sus de tot
-                                duration: const Duration(milliseconds: 150), // Animație foarte rapidă
-                                curve: Curves.easeOutCubic,
-                              );
-                            }
-                          });
-                        },
-                        onReorderEnd: (index) {
-                          setState(() {
-                            _isGlobalReordering = false;
-                          });
-                        },
                         onReorder: (oldIndex, newIndex) {
                           setState(() {
                             if (newIndex > oldIndex) newIndex -= 1;
@@ -840,12 +820,6 @@ class _WorkoutFormPageState extends State<WorkoutFormPage> {
 
                           final unit = _unitFor(exercise.exerciseId);
                           final hasOverride = _exerciseUnitOverride.containsKey(exercise.exerciseId);
-
-                          if (_isGlobalReordering) {
-                            return KeyedSubtree(
-                                key: ValueKey('active_ex_compact_${exercise.exerciseId}_$exIndex'),
-                                child: _buildMiniExerciseCard(displayName, coverImage, theme));
-                          }
 
                           return Card(
                             key: ValueKey('edit_ex_${exercise.exerciseId}_$exIndex'),

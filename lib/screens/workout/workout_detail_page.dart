@@ -126,8 +126,8 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
         ),
         const SizedBox(height: 12),
         Card(
-          elevation: 0,
-          color: theme.cardColor.withOpacity(0.4),
+          elevation: 1,
+          color: context.bg,
           child: Padding(
             padding: const EdgeInsets.all(16.0),
             child: ListView.builder(
@@ -310,8 +310,8 @@ class _WorkoutDetailPageState extends State<WorkoutDetailPage> {
 
             // --- PANOU STATISTICI ---
             Card(
-              elevation: 0,
-              color: theme.cardColor.withOpacity(0.6),
+              elevation: 1,
+              color: context.bg,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
                 side: BorderSide(color: theme.colorScheme.primary.withOpacity(0.2)),

@@ -220,12 +220,12 @@ class _ProfilePageState extends State<ProfilePage> {
                           case ProfileChartType.consistency:
                             return const WeeklyActivityChart(
                               key: ValueKey('consistency_chart'),
-                              weeksCount: 8,
+                              initialWeeksCount: 8,
                             );
                           case ProfileChartType.muscleSplit:
                             return const MuscleSplitChart(
                               key: ValueKey('muscle_split_chart'),
-                              daysRange: 30,
+                              initialDaysRange: 30,
                             );
                           case ProfileChartType.totalVolume:
                             return const TotalVolumeChart(

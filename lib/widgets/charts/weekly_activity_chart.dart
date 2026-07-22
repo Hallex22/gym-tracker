@@ -4,14 +4,42 @@ import 'package:gym_tracker/theme/app_theme.dart';
 
 import '../../services/stats_service.dart';
 
-class WeeklyActivityChart extends StatelessWidget {
-  final int weeksCount;
+enum ConsistencyTimeframe {
+  weeks4(4, 'Last 4 Weeks'),
+  weeks8(8, 'Last 8 Weeks'),
+  weeks12(12, 'Last 12 Weeks');
 
-  const WeeklyActivityChart({super.key, this.weeksCount = 8});
+  final int weeks;
+  final String label;
+  const ConsistencyTimeframe(this.weeks, this.label);
+}
+
+class WeeklyActivityChart extends StatefulWidget {
+  final int initialWeeksCount;
+
+  const WeeklyActivityChart({super.key, this.initialWeeksCount = 8});
+
+  @override
+  State<WeeklyActivityChart> createState() => _WeeklyActivityChartState();
+}
+
+class _WeeklyActivityChartState extends State<WeeklyActivityChart> {
+  late ConsistencyTimeframe _selectedTimeframe;
+
+  @override
+  void initState() {
+    super.initState();
+    // Inițializăm starea pe baza opțiunii celei mai apropiate de prop-ul primit
+    _selectedTimeframe = ConsistencyTimeframe.values.firstWhere(
+      (e) => e.weeks == widget.initialWeeksCount,
+      orElse: () => ConsistencyTimeframe.weeks8,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final int weeksCount = _selectedTimeframe.weeks;
     final data = StatsService.getWorkoutsPerWeek(weeksCount);
 
     if (data.isEmpty) {
@@ -29,10 +57,12 @@ class WeeklyActivityChart extends StatelessWidget {
         color: context.bg,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: context.borderMuted),
+        boxShadow: context.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header cu titlu + Dropdown Selector
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -44,11 +74,38 @@ class WeeklyActivityChart extends StatelessWidget {
                   color: theme.colorScheme.onSurface,
                 ),
               ),
-              Text(
-                'Last $weeksCount Weeks',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: theme.colorScheme.onSurfaceVariant,
+              // Dropdown subtil
+              Container(
+                height: 28,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                decoration: BoxDecoration(
+                  color: context.bgLight,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<ConsistencyTimeframe>(
+                    value: _selectedTimeframe,
+                    icon: Icon(Icons.arrow_drop_down, size: 18, color: theme.colorScheme.primary),
+                    dropdownColor: context.bgLight,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.primary,
+                    ),
+                    onChanged: (ConsistencyTimeframe? newValue) {
+                      if (newValue != null) {
+                        setState(() {
+                          _selectedTimeframe = newValue;
+                        });
+                      }
+                    },
+                    items: ConsistencyTimeframe.values.map((ConsistencyTimeframe tf) {
+                      return DropdownMenuItem<ConsistencyTimeframe>(
+                        value: tf,
+                        child: Text(tf.label),
+                      );
+                    }).toList(),
+                  ),
                 ),
               ),
             ],
@@ -105,7 +162,8 @@ class WeeklyActivityChart extends StatelessWidget {
                           final int index = value.toInt();
                           if (index < 0 || index >= data.length) return const SizedBox.shrink();
 
-                          if (data.length > 4 && index % 2 != 0) return const SizedBox.shrink();
+                          // Ascundem etichetele intermediare dacă sunt prea multe săptămâni pentru a evita suprapunerea
+                          if (data.length > 6 && index % 2 != 0) return const SizedBox.shrink();
 
                           // Spargem cheia ca să luăm doar data de start "15 Jul"
                           final startLabel = data[index].key.split('|').first;
@@ -164,35 +222,32 @@ class WeeklyActivityChart extends StatelessWidget {
                   final Color separatorColor = context.text.withOpacity(0.5);
                   const double separatorThicknes = 0.8;
 
+                  // Ajustăm lățimea barei în funcție de numărul de săptămâni afișate
+                  final double barWidth = weeksCount > 8 ? 10 : 16;
+
                   return BarChartGroupData(
                     x: index,
                     barRods: [
                       BarChartRodData(
                         toY: workoutsCount.toDouble(),
-                        width: 16,
+                        width: barWidth,
                         borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-                        // Culoarea de bază a barei (va fi vizibilă doar dacă sunt 0 antrenamente, ca o schiță)
                         color: workoutsCount > 0
                             ? theme.colorScheme.primary
                             : theme.colorScheme.outlineVariant.withOpacity(0.3),
-
-                        // 💡 MAGIC ZONE: Segmentăm bara folosind stack-uri!
                         rodStackItems: workoutsCount == 0
-                            ? [] // Dacă nu avem antrenamente, nu desenăm segmente
+                            ? []
                             : List.generate(workoutsCount * 2 - 1, (stackIndex) {
-                                // Generăm alternativ: segment de culoare -> linie de separare -> segment de culoare
                                 final isSeparator = stackIndex % 2 != 0;
                                 final int segmentIdx = stackIndex ~/ 2;
 
                                 if (isSeparator) {
-                                  // Acesta este „rostul” dintre cărămizi
                                   return BarChartRodStackItem(
-                                    segmentIdx + 1 - (separatorThicknes / 10), // start
-                                    segmentIdx + 1, // end
+                                    segmentIdx + 1 - (separatorThicknes / 10),
+                                    segmentIdx + 1,
                                     separatorColor,
                                   );
                                 } else {
-                                  // Aceasta este cărămida propriu-zisă (antrenamentul)
                                   return BarChartRodStackItem(
                                     segmentIdx.toDouble(),
                                     (segmentIdx + 1) - (segmentIdx < workoutsCount - 1 ? (separatorThicknes / 10) : 0),
@@ -200,8 +255,6 @@ class WeeklyActivityChart extends StatelessWidget {
                                   );
                                 }
                               }),
-
-                        // Fundalul barelor (până la limita maximă de sus)
                         backDrawRodData: BackgroundBarChartRodData(
                           show: true,
                           toY: yLimit,
